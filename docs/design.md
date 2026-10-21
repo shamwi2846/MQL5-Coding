@@ -103,7 +103,7 @@ Body, in short plain sentences. Everything a pure review needs stays here; teste
    - Compile every affected `.mq5`, including consumers of a changed `.mqh`.
      - Find them by searching the project for the include's file name. Repeat the search for each header that includes it, until every `.mq5` at the end of the chain is found.
      - Report any consumer you could not resolve.
-   - When the task also needs a test, call the tester directly: it compiles the source itself, so do not compile separately first.
+   - When the task also needs a test, call the tester directly for the EA under test: it compiles that source itself, so do not compile it separately first. Compile every other affected `.mq5`, including indirect consumers, separately.
    - Recompile only after a change to the source, an include or another build input. Reuse files already read and run results until their inputs change.
    - Read only the guide for the script you call, once per task. `references/strategy-tester.md` covers a test, including its compile-result fields. Read `references/compile.md` only when calling `Compile-Mql5.ps1` on its own.
    - Compiling a file inside a running terminal's `MQL5` folder makes that terminal reload any chart running it (`REASON_RECOMPILE`).
@@ -150,12 +150,12 @@ Body, in short plain sentences. Everything a pure review needs stays here; teste
 10. Hash the `.ex5`, print the result, and return the hash to a calling tester.
 11. In `finally`, once the job is confirmed empty:
     - Delete the temporary folder only after a success or an ordinary compile-error result (exit 0 or 1) whose diagnostics were all printed in full: no line left out and no line shortened.
-    - Otherwise keep the folder and print the full log's path. That covers:
+    - Otherwise keep the folder and report the full log's path. `Compile-Mql5.ps1` prints it. When the tester calls the compile function, the path is returned to the tester, which copies the log into its output folder as `compile.log`, records it in `result.json` and prints nothing extra. Keeping the folder covers:
       - lines left out or shortened by the caps;
       - a tool or evidence failure (exit 2), such as a log with no `Result:` line.
 
       The log costs no context until it is needed, and no detail is lost to the caps.
-    - A calling tester copies that kept log into its output folder as `compile.log` and then deletes the temporary folder.
+    - After copying the kept log, the tester deletes the temporary folder.
 
     If the job cannot be confirmed empty, the step fails closed: it reports no artifact, keeps the temporary folder, prints the process IDs still running, and returns 2. The `.ex5` at the output path is then untrusted, and the tester never uses it, because it tests only the hash its own compile accepted.
 
@@ -180,7 +180,7 @@ Body, in short plain sentences. Everything a pure review needs stays here; teste
 
 ## 6. Strategy Tester smoke run
 
-**Command:** `Invoke-Mt5TesterSmoke.ps1 -SourcePath <file.mq5> [-IncludePath ...] -Symbol -Period [-FromDate <YYYY.MM.DD> -ToDate <YYYY.MM.DD>] [-Model <0-4>] [-Deposit <amount>] [-Currency <code>] [-Leverage <n>] [-ExecutionMode <n>] (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath] [-TimeoutSeconds 300] [-ExpectedLogMarker <MQL5_CODING_PASS:nonce>]`
+**Command:** `Invoke-Mt5TesterSmoke.ps1 -SourcePath <file.mq5> [-IncludePath <MQL5 root>] -Symbol <symbol> -Period <period> [-FromDate <YYYY.MM.DD> -ToDate <YYYY.MM.DD>] [-Model <0-4>] [-Deposit <amount>] [-Currency <code>] [-Leverage <n>] [-ExecutionMode <n>] (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath <terminal64.exe>] [-TimeoutSeconds 300] [-ExpectedLogMarker <MQL5_CODING_PASS:nonce>]`
 
 Optional settings and what happens when they are left out:
 - `-FromDate`/`-ToDate` come as a pair or not at all. When omitted, the run uses the last complete calendar month: `FromDate` is the 1st of the previous month and `ToDate` the 1st of the current month, so a run in January uses December of the previous year.
@@ -208,7 +208,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
 
 **Run:**
 
-1. Claim the output folder with a create-only call that fails if it already exists; failure stops with exit 2, so two runs never share an output folder. Hold `<data>\.mql5-coding-smoke.data-lock`, created exclusively with delete-on-close, for the whole run. It is the same file name v1 uses, so old and new runners exclude each other. If another runner holds it, stop with exit 4.
+1. Acquire `<data>\.mql5-coding-smoke.data-lock`, created exclusively with delete-on-close, and hold it for the whole run. It is the same file name v1 uses, so old and new runners exclude each other. If another runner holds it, stop with exit 4; nothing is created, so a retry with the same output folder works. Then claim the output folder with a create-only call that fails if it already exists; failure stops with exit 2, so two runs never share an output folder.
 2. Compile the source through the shared compile function with this terminal's `metaeditor64.exe`. Any compile result other than 0 stops here with tester exit 2, including a compile timeout (compile exit 3). `result.json` records the compile's own exit code and status in its compile section. Tester exit 3 is reserved for a timeout after MT5 is launched. Keep the hash the compile returned.
 3. Create a run id: `s` plus 10 random hex characters. The staged name is `<name>-<run-id>`. The tester saves the last inputs used to `MQL5\Profiles\Tester\<expert name>.set`; a v1 run, staged under the real name, was seen overwriting a user's preset this way. A unique staged name leaves the user's presets alone.
 4. Copy the `.ex5` to `MQL5\Experts\Mql5Smoke\<staged>.ex5`. The copy's hash must equal the hash from step 2, otherwise stop with exit 2. Create `Mql5Smoke` if it is missing, and note that this run created it.
@@ -246,6 +246,8 @@ All of these must hold:
 - No system record containing `tester stopped because OnInit returns non-zero`.
 - With `-ExpectedLogMarker`: an application line whose message after the timestamp is exactly the marker. It must come after the test-start record and before the pass record.
 - The terminal exited by itself before the deadline.
+
+**Unrecognized journal.** The terminal journal can gain records that contain none of the expected English terminal phrases. In that case the status is `journal_phrases_not_found`, exit 2, with a hint that MT5 must run in English or the start config was not loaded. It is never reported as a failed strategy test (exit 1). No pre-launch language check exists: MT5's config `.ini` files hold no readable language setting (checked on build 6258).
 
 The run id sits in both the ini path and the expert path, and the lock plus the running check keep other terminals of this install out. So the appended lines belong to this run. No time-window logic is needed.
 
@@ -311,7 +313,11 @@ Field names stay readable, not abbreviated. Matched journal records, failure con
   - Report the settings actually used; the verdict stays `engine_smoke_passed`.
   - Never use these defaults to judge strategy behavior or results; a backtest the user asks for always uses their settings.
 - Do not open the selected terminal by hand during a run. The running check is only a point-in-time observation.
-- **Closing a running terminal, when the user's instructions allow it.** Close it gracefully with `CloseMainWindow()` and wait up to 30 seconds for the process to exit. Force it with `Stop-Process` only if it is still running then. A hard kill can damage the terminal's history files. This usually takes 1–3 seconds.
+- **Closing a running terminal, when the user's instructions allow it.** The user's standing instruction on this test PC covers both steps below.
+  1. Close it gracefully with `CloseMainWindow()` and wait up to 30 seconds for the process to exit. This usually takes 1–3 seconds.
+  2. Force it with `Stop-Process` only if it is still running then. A hard kill can damage the terminal's history files.
+
+  Before rerunning, wait up to 30 more seconds until no `terminal64.exe` at that path and no `metatester64.exe` from that install folder remain. If any remain, report the run as blocked and do not rerun.
 - Start a long test as a background command, or give the call a timeout longer than `-TimeoutSeconds`. If the client kills the runner, the Job Object stops MT5 and its agents with it, but that run's staging stays behind.
 - Recommended setup for people who keep a terminal open: a second MT5 install used only for testing, selected with `-TerminalPath`. Installing outside Program Files does not by itself make it portable, so the AppData binding still applies. Start it once normally and log in to a demo account, so `origin.txt` and history exist.
 
@@ -403,6 +409,7 @@ Four groups in `tests/Test-Safety.ps1`, plain PowerShell with no framework. They
      - a real `tester stopped because OnInit returns non-zero` system record;
      - a required marker that never appears.
    - An echoed input `x=tester stopped because OnInit returns non-zero` does not change the result.
+   - A terminal journal with new records but none of the expected English phrases gives `journal_phrases_not_found` with exit 2, not exit 1.
 
 **Fakes:** tiny console programs built with the Windows .NET Framework `csc.exe`, the method v1's tests used. PowerShell 7's `Add-Type` cannot build executables (verified). They stand in for `metaeditor64.exe` and `terminal64.exe` in a temporary folder tree that mimics an install plus an AppData data folder.
 
