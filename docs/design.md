@@ -169,7 +169,9 @@ Body, in short plain sentences. Everything a pure review needs stays here; teste
 
 ## 6. Strategy Tester smoke run
 
-**Command:** `Invoke-Mt5TesterSmoke.ps1 -SourcePath <file.mq5> [-IncludePath ...] -Symbol -Period -FromDate -ToDate -Model -Deposit -Currency -Leverage -ExecutionMode (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath] [-TimeoutSeconds 300] [-ExpectedLogMarker <MQL5_CODING_PASS:nonce>]`
+**Command:** `Invoke-Mt5TesterSmoke.ps1 -SourcePath <file.mq5> [-IncludePath ...] -Symbol -Period [-FromDate <YYYY.MM.DD> -ToDate <YYYY.MM.DD>] [-Model <0-4>] -Deposit -Currency -Leverage -ExecutionMode (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath] [-TimeoutSeconds 300] [-ExpectedLogMarker <MQL5_CODING_PASS:nonce>]`
+
+`-FromDate`/`-ToDate` come as a pair or not at all. When they are omitted, the run uses the last complete calendar month; when `-Model` is omitted, it uses model 1 (1-minute OHLC). The model omits them only for a pure engine smoke check (see "Engine smoke defaults" below). A backtest the user asks for always passes the user's dates and model.
 
 The script name stays as in v1. There is no preflight mode: with no confirmations, a run performs its gates first and stops before staging anything when one fails. Invalid input gives exit 2; a blocking condition (the terminal is running, or there is no single data folder) gives exit 4. Tests always start from source: the tester compiles it with the terminal's own `metaeditor64.exe`.
 
@@ -177,7 +179,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
 
 1. **Inputs.** Validate every setting.
    - Symbol, period and currency must hold no line breaks, `=`, `;` or path separators.
-   - Dates use `YYYY.MM.DD`, with to after from.
+   - Dates use `YYYY.MM.DD`, with to after from. Both are given or neither is; when neither is given, the defaults above apply.
    - Exactly one EA input choice is allowed.
    - The output folder must not exist, and its parent must be writable.
 2. **Terminal.** Take `-TerminalPath` if given; otherwise use the unique installation, as for compilation. It must be a file named `terminal64.exe` with major version 5.
@@ -491,6 +493,8 @@ What reaches the model's context in one clean compile-and-test task. Estimates u
 | Tester console output | ~50 (a path) | ~250 (one summary line) |
 | Run result read afterwards (v1: `smoke-result.json`, 18 KB on average and up to 37 KB; v2: not needed on a clean run) | ~4,600 | 0 |
 | **Total, clean run** | **~13,000** | **~2,450** |
+
+This table is the current v2 estimate. It supersedes the earlier figures of about 4,500 and about 2,800 tokens in this design's history.
 
 A failed run adds about 800–1,500 tokens for v2, because the model then opens `result.json`. A compile on its own prints about 100 tokens when clean. The table leaves out docs-MCP responses, source-file reads and the model's own loops. The lean lookup arguments save roughly 300–1,500 tokens on a lookup-heavy task.
 
