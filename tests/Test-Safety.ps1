@@ -183,6 +183,8 @@ try {
         ($summary.status -eq 'application_marker_passed') -and ($saved.status -eq $summary.status) -and ($summary.cleanup -eq 'ok'))
     Check 'end to end: the tester recompiled and staged exactly its own build' (((Get-Content -LiteralPath "$root\seen.txt") -eq $saved.sha256) -and ($saved.sha256 -ne $compiled.sha256))
     Check 'end to end: the terminal was given exactly the supplied .set' ((Get-Content -LiteralPath "$root\seen-set.txt") -eq $setHash)
+    $badTimeout = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$scripts\Compile-Mql5.ps1" -SourcePath $source -MetaEditorPath $editor -TimeoutSeconds abc
+    Check 'compile with a non-numeric -TimeoutSeconds: exit 2 with a summary line, never exit 1' (($LASTEXITCODE -eq 2) -and (@($badTimeout) -like 'MQL5_RESULT *'))
     $iniBytes = [IO.File]::ReadAllBytes("$root\entry\$($saved.staged_name).ini")
     $iniCopy = [Text.Encoding]::Unicode.GetString($iniBytes)
     Check 'end to end: the ini is UTF-16LE with BOM and CRLF, has the safety keys and Leverage=1:100' (($iniBytes[0] -eq 0xFF) -and ($iniBytes[1] -eq 0xFE) -and

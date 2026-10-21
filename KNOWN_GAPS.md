@@ -5,7 +5,7 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 ## G1 · open · 2026-10-21 · LOW
 - Task: -
 - Where: docs/design.md
-- Problem: All scripts together (installed ~730 plus installer and tests ~320) come to about 1,050 lines against the roughly-800 target in R8. Measured at v2.0.0: 971 installed script lines plus 521 for the installer, tests and fakes.
+- Problem: All scripts together come to about 1,490 lines against the roughly-800 target in R8. Measured at v2.0.0: 971 installed script lines plus 521 for the installer, tests and fakes.
 - Trigger: -
 - Fix: -
 - Log: recorded by hand
@@ -18,7 +18,7 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Trigger: The implementation is assessed for release using the frozen files and supplied evidence.
 - Fix: Add the required real-check results to Notes. If Codex is permission-blocked, record that failure and the Claude-first release decision.
 - Log: 20261021121726-9c5e32
-- Why skipped: pair: both
+- Why skipped: Fixed with G7: the real-check record is in docs/design.md section 10 ("Real check record, v2.0.0"), which also lists the Codex side as still to do under the Claude-first decision.
 
 ## G3 · fixed · 2026-10-21 · LOW
 - Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)

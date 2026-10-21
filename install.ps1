@@ -23,7 +23,7 @@ if ($Client -ne 'Codex') {
 if ($Client -ne 'Claude') {
     $destinations.Codex = Get-SkillFolder $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' })
 }
-$files = @(Get-ChildItem -LiteralPath $source -Recurse -File | ForEach-Object { $_.FullName.Substring($source.Length + 1) })
+$files = @(Get-ChildItem -LiteralPath $source -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($source.Length + 1) })
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $allMatch = $true
 

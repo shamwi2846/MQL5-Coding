@@ -7,7 +7,7 @@ param(
     [string]$IncludePath,
     [string]$MetaEditorPath,
     [string]$TerminalPath,
-    [int]$TimeoutSeconds = 120,
+    [string]$TimeoutSeconds = '120',
     [Parameter(ValueFromRemainingArguments = $true)][object[]]$UnknownArguments
 )
 

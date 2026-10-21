@@ -134,7 +134,7 @@ function Invoke-Mql5Compile {
         [string]$IncludePath,
         [string]$MetaEditorPath,
         [string]$TerminalPath,
-        [int]$TimeoutSeconds = 120,
+        [string]$TimeoutSeconds = '120',
         [string]$AppData = $env:APPDATA
     )
     $result = [ordered]@{
@@ -150,7 +150,11 @@ function Invoke-Mql5Compile {
         if ([IO.Path]::GetExtension($source) -ne '.mq5' -or -not (Test-Path -LiteralPath $source -PathType Leaf)) {
             Stop-Mql5 "The source must be an existing .mq5 file: $source"
         }
-        if ($TimeoutSeconds -lt 1) { Stop-Mql5 '-TimeoutSeconds must be at least 1.' }
+        # Taken as text, so a bad value is an input failure (exit 2), never a binding error (exit 1).
+        if ($TimeoutSeconds -notmatch '^\d{1,5}\z' -or [int]$TimeoutSeconds -lt 1) {
+            Stop-Mql5 "-TimeoutSeconds must be a whole number of seconds from 1 to 99999, not '$TimeoutSeconds'."
+        }
+        $timeout = [int]$TimeoutSeconds
         $editor = Select-MetaEditor $MetaEditorPath $TerminalPath $AppData
         $result.editor = $editor
         $result.editor_build = [Diagnostics.FileVersionInfo]::GetVersionInfo($editor).FilePrivatePart
@@ -163,7 +167,7 @@ function Invoke-Mql5Compile {
         $ex5 = [IO.Path]::ChangeExtension($source, '.ex5')
 
         $mutex = [Threading.Mutex]::new($false, (Get-CompileLockName $ex5))
-        try { $held = $mutex.WaitOne([TimeSpan]::FromSeconds($TimeoutSeconds)) } catch [Threading.AbandonedMutexException] { $held = $true }
+        try { $held = $mutex.WaitOne([TimeSpan]::FromSeconds($timeout)) } catch [Threading.AbandonedMutexException] { $held = $true }
         if (-not $held) { Stop-Mql5 "Another compile of $ex5 is still running." }
 
         $temp = Join-Path ([IO.Path]::GetTempPath()) ('mql5-compile-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
@@ -178,11 +182,11 @@ function Invoke-Mql5Compile {
         Import-OwnedProcess
         $job = [OwnedProcess]::Start($editor, $arguments, (Split-Path -Parent $editor))
         # Wait for MetaEditor and anything it started; nothing is read before the job is empty.
-        if (-not $job.WaitForEmpty($TimeoutSeconds * 1000)) {
+        if (-not $job.WaitForEmpty($timeout * 1000)) {
             $job.Kill()
             $jobEmpty = $job.WaitForEmpty(10000)
             if (-not $jobEmpty) { Stop-Mql5 ("MetaEditor processes could not be stopped: " + ($job.RemainingProcessIds() -join ', ')) }
-            return Set-Outcome $result 3 'timeout' "MetaEditor did not finish within $TimeoutSeconds s; its process tree was stopped."
+            return Set-Outcome $result 3 'timeout' "MetaEditor did not finish within $timeout s; its process tree was stopped."
         }
 
         if (-not (Test-Path -LiteralPath $log -PathType Leaf)) { Stop-Mql5 'MetaEditor wrote no log, so nothing was compiled.' }

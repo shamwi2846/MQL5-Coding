@@ -450,7 +450,7 @@ Repeat after any terminal upgrade.
 
 After every run, cleanup was `ok` and nothing carrying the run id was left anywhere under `%APPDATA%\MetaQuotes`. The run lock was released, the `Mql5Smoke` folder created by the run was removed, and nothing appeared next to the source apart from the `.ex5` build output. `config\common.ini` `[Experts]` was unchanged. `Add-Type` of the helper took 0.28 s on 5.1 and 0.76 s on 7, so 5.1 stays the default and no DLL cache is needed. The summary line is about 760 characters (about 190 tokens).
 
-**Codex side: still to do.** Run the same marker check through Codex after installing. It needs the user's Codex session with permission to start processes; crosscheck keeps GPT read-only, so it could not be run here. Release follows the Claude-first decision (2026-10-21).
+**Codex side (2026-10-21, with the user's OK for this one run).** `codex exec` (codex-cli 0.162.1) with full access to start processes read `SKILL.md` and the tester guide from this repository, then ran the same marker check with the defaults. Result: `application_marker_passed` with `cleanup: ok` and leverage 1:100, in 123 s including the model's own steps; nothing was left behind and no repository file changed. Codex reached the skill by path because it was not installed yet, so discovery of the installed skill is confirmed at install time.
 
 ## 11. Decisions and open points
 
