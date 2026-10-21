@@ -107,7 +107,13 @@ Order and content, in short plain sentences:
     - The restored file is never reported as this run's artifact.
     - If restoring fails, keep the temporary folder, print the backup's path and return 2.
 
-    After any outcome, success included, delete the temporary folder, unless a restore failed.
+    If the job cannot be confirmed empty, the step fails closed:
+    - Leave the `.ex5` alone and report no artifact.
+    - Keep the temporary folder with its verified backup.
+    - Print the backup's path and the process IDs still running, and return 2.
+    - The `.ex5` at the output path is now untrusted. The tester never uses it, because it tests only what its own compile accepted.
+
+    After any outcome, success included, delete the temporary folder, unless the job could not be confirmed empty or a restore failed.
 
 **Restore:** MetaEditor build 6258 deletes the old `.ex5` on a failed compile (verified), and a timed-out compile can leave a partial file. Without the restore, a terminal that restarts later could lose an EA that was running from that file.
 
