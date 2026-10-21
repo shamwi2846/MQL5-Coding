@@ -7,7 +7,7 @@ Status: final draft. No skill code changes until this design is approved.
 Rewrite the skill around four jobs: documentation-first answers, careful review, compilation and one Strategy Tester smoke run. One skill folder serves Claude Code and Codex. Everything else goes.
 
 - v1 (the MQL5-Coding-Skill repository, v1.2.10): 41 files, about 11,300 lines, about 13,000 words of reference text.
-- Target: 10 installed files, about 730 lines of installed code, about 2,500 words of text.
+- Target: 10 installed files, about 745 lines of installed code, about 2,000 words of text.
 
 The skill is built for a test PC: no real-money accounts and no live trading. Compiling, backtesting and using any MT5 terminal or account on that PC need no confirmation. The scripts protect against mistakes, stale builds, conflicting runs and accidental deletion of the user's files. They do not try to defend against malicious local software or untrusted EAs, and they do not guard live accounts. The README says so for anyone who installs the public skill.
 
@@ -53,56 +53,65 @@ Goes:
 | File | Job | Lines |
 |---|---|---:|
 | `SKILL.md` | Instructions for both clients | ~95 |
-| `references/compile.md` | Compile parameters, output, exit codes | ~45 |
-| `references/strategy-tester.md` | Tester gates, settings, evidence, notes, exit codes | ~90 |
+| `references/compile.md` | How to call compile: arguments, output fields, exit codes | ~25 |
+| `references/strategy-tester.md` | How to call the tester: arguments, summary and `result.json` fields, exit codes, notes, bounded reading | ~60 |
 | `scripts/Compile-Mql5.ps1` | Compile entrypoint: parameters, then one call into `Mql5Compile.ps1` | ~50 |
 | `scripts/Invoke-Mt5TesterSmoke.ps1` | Tester entrypoint: parameters, then one call into `Mql5Tester.ps1` | ~60 |
-| `scripts/Mql5Compile.ps1` | Installation discovery and validators, the compile function | ~205 |
-| `scripts/Mql5Tester.ps1` | Data-folder binding, running check, staging, launch, journal rules, headline numbers and error lines, cleanup; loads `Mql5Compile.ps1` | ~305 |
+| `scripts/Mql5Compile.ps1` | Installation discovery and validators, the compile function, keeping the log after a failure | ~210 |
+| `scripts/Mql5Tester.ps1` | Data-folder binding, running check, staging, launch, journal rules, the summary line, headline numbers, error lines and failure context, cleanup; loads `Mql5Compile.ps1` | ~315 |
 | `scripts/OwnedProcess.cs` | Start suspended, put in a kill-on-close Job Object, resume, wait, kill, confirm empty | ~110 |
 | `agents/openai.yaml` | Codex display name and MCP dependency; Claude ignores it | ~12 |
 | `version.json` | Installed version, for humans | 1 |
 
 The dependency is one-way: the tester library loads the compile library, never the reverse. The native helper is loaded once. Result printing stays in the entrypoints.
 
-Installed script total: about 730 lines.
+Installed script total: about 745 lines.
 
 In the repository, outside the installed folder:
 
-- `install.ps1` (~70 lines) and `tests/Test-Safety.ps1` with its fake programs (~250 lines), so about 1,050 lines in all.
+- `install.ps1` (~70 lines) and `tests/Test-Safety.ps1` with its fake programs (~250 lines), so about 1,065 lines in all.
 - One CI workflow, a short README and one nontrading test EA.
 
 These are estimates, not acceptance criteria. Measure the implementation, and never weaken a check to meet a number.
 
 ## 4. SKILL.md
 
-Frontmatter description, short and discriminating:
+Frontmatter description, short and discriminating, with full trigger coverage:
 
-> Write, review, explain, debug, compile and backtest MetaTrader 5 MQL5 programs (Expert Advisors, indicators, scripts, services, libraries; .mq5, .mqh, .ex5) on Windows, checking MQL5 facts in the mql5-chm docs first. Not for MQL4 or MetaTrader 4.
+> Write, review, explain, debug, compile and backtest MetaTrader 5 MQL5 code (EAs, indicators, scripts, services, libraries; .mq5/.mqh/.ex5) on Windows, checking MQL5 facts in the mql5-chm docs first. Not MQL4/MT4.
 
-Body, in short plain sentences:
+Body, in short plain sentences. Everything a pure review needs stays here; tester procedures live in the tester guide.
 
 1. **Scope.** MT5 and MQL5 only; no MQL4. Scripts live in the `scripts` folder next to this file. Use the MCP tool names the client lists (Claude shows `mcp__mql5-chm__...`).
 2. **Intent.** Review and explanation never edit. Diagnosis finds the evidenced cause and fixes only when asked. Changes are the smallest safe change. Never silently add or change entries, exits, stops, targets, sizing, retries, directions or position management. Never place trades outside the Strategy Tester (demo accounts included), move money or enter credentials.
 3. **Docs first.**
-   - Call `mql5_chm_status` once per task.
-   - Use `mql5_chm_lookup_identifiers` for several names and `mql5_chm_search` for one. Only exact matches count.
-   - Read the passage with `section_id` or `focus`, and reuse a verified passage instead of reading it again.
-   - Cite the title, topic id, section id and revision.
-   - When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 CHM`, then use and cite official MetaQuotes pages. Never fill gaps from memory.
-   - If no `mql5_chm_*` tools are listed, say so and carry on with the official pages, using the same exact phrase for API facts; a missing MCP does not stall review work.
-   - Logs describe the local run, not the API.
-4. **Evidence and classification.** Read the compiler log and the terminal, tester and Expert journals before diagnosing a runtime problem. When they are missing, report that gap instead of presenting a source-based guess as the cause. Classify the problem as one of: compilation, initialization/runtime, indicators/timeseries, trade execution, tester/environment, strategy logic. State symptom, cause, impact and evidence separately.
+   - **Status.** Before the first MQL5 fact in a task, call `mql5_chm_status` once.
+   - **Lookups.** For several names, make one `mql5_chm_lookup_identifiers` call with `source: "mql5"` and `limit: 1`. For one name, use `mql5_chm_search` with `source: "mql5"`, `limit: 1` and `expand: false`. Only an exact match whose passage contains the identifier as a whole token counts; approximate matches never do.
+   - **Reads.** Use `mql5_chm_read` with `section_id` or `focus`, `max_chars` of 1500–3000, `include_related: false` and `include_images: false`. Follow `next_cursor` when the passage does not yet settle the claim; a small first excerpt is never a reason to stop.
+   - **Reuse.** Keep a verified passage and never read it twice.
+   - **Citations.** Give the title, topic id and section id, plus the revision once per answer.
+   - **Fallback.** When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 CHM`, then use and cite official MetaQuotes pages. Never fill gaps from memory. If no `mql5_chm_*` tools are listed, say so and carry on with the official pages, using the same exact phrase for API facts; a missing MCP does not stall review work.
+   - **Logs.** They describe the local run, not the API.
+4. **Evidence and classification.** Read the compiler log and the journals before diagnosing a runtime problem. When they are missing, report that gap instead of presenting a source-based guess as the cause. Classify the problem as one of: compilation, initialization/runtime, indicators/timeseries, trade execution, tester/environment, strategy logic. State symptom, cause, impact and evidence separately.
 5. **Review checklist.** Event lifecycle; handle creation, readiness, counts and release; buffer direction and completed bars; volume min/max/step; digits, tick size, stop and freeze levels; trade results; netting versus hedging; symbol/magic/direction ownership filters; nothing unrelated renamed or reformatted.
-6. **Validate.** Compile every affected `.mq5`, including consumers of a changed `.mqh`. Read `references/compile.md` before the first compile of a task and `references/strategy-tester.md` before the first tester run; once per task is enough. Compiling a file inside a running terminal's `MQL5` folder makes that terminal reload any chart running it (`REASON_RECOMPILE`).
+6. **Validate.**
+   - Compile every affected `.mq5`, including consumers of a changed `.mqh`.
+   - When the task also needs a test, call the tester directly: it compiles the source itself, so do not compile separately first.
+   - Recompile only after an edit. Reuse files already read and run results until their inputs change.
+   - Read `references/compile.md` before the first compile of a task and `references/strategy-tester.md` before the first tester run; once per task is enough.
+   - Compiling a file inside a running terminal's `MQL5` folder makes that terminal reload any chart running it (`REASON_RECOMPILE`).
 7. **Testing.**
    - Never run an `.ex5` the user did not build or vouch for. Building it here does not make it trustworthy: the EA runs with the tester agent's file and network access.
    - Pass markers go only in a separate test EA. Never edit the user's EA just to test it, unless the user asks or it already has a self-test. A user's EA gets the plain engine smoke test.
-   - Never read a tester report or journal file whole; a report is about 500 KB, roughly 130,000 tokens. Use the headline numbers and error lines in `result.json`. For one more report value, extract just that cell with a regex capture and print the capture, never the matching line, which can be the whole file. For journals, read only this run's byte range from `result.json`, in chunks of at most 8 KB.
+   - Use the tester's summary line first. Open `result.json` only when the summary is not enough. Never read a report or journal file whole: a report is about 500 KB, roughly 130,000 tokens. The tester guide gives the bounded way to get more.
    - If the selected terminal is already running, the tester refuses. Close it when the user's instructions allow; otherwise ask.
 8. **Report.** Outcome first; files and behavior changed; evidenced cause; CHM citations; compile result with errors, warnings and artifact; tester settings, result and output folder; checks not run; remaining uncertainty. A smoke pass never implies profitability or live safety.
 
-`references/` files hold only how to call the scripts and how to read their results. No history.
+`references/` files are invocation and result guides only: arguments, defaults, exit codes, output fields and the caveats a caller needs. Mechanics stay in this design document. No history.
+
+`references/strategy-tester.md` also holds the bounded-reading rules:
+- For one more report value, extract just that cell with a regex capture and print the capture, never the matching line, which can be the whole file.
+- For journals, read only this run's byte range from `result.json`, in chunks of at most 8 KB.
 
 ## 5. Compilation
 
@@ -131,14 +140,18 @@ Body, in short plain sentences:
 8. Errors above zero return 1.
 9. Zero errors still require a nonempty `.ex5` whose last-write time changed from step 4, or that is new. Otherwise return 2.
 10. Hash the `.ex5`, print the result, and return the hash to a calling tester.
-11. In `finally`, once the job is confirmed empty, delete the temporary folder. If the job cannot be confirmed empty, the step fails closed: it reports no artifact, keeps the temporary folder, prints the process IDs still running, and returns 2. The `.ex5` at the output path is then untrusted, and the tester never uses it, because it tests only the hash its own compile accepted.
+11. In `finally`, once the job is confirmed empty:
+    - After a clean success, delete the temporary folder.
+    - After a failed compile, or when diagnostic lines were left out of the output, keep the folder and print the full log's path. The log costs no context until it is needed, and no detail is lost to the cap. A calling tester copies that log into its output folder as `compile.log` and then deletes the temporary folder.
+
+    If the job cannot be confirmed empty, the step fails closed: it reports no artifact, keeps the temporary folder, prints the process IDs still running, and returns 2. The `.ex5` at the output path is then untrusted, and the tester never uses it, because it tests only the hash its own compile accepted.
 
 **Freshness:** in the do-nothing case MetaEditor writes nothing, so there is no log and step 7 fails. The last-write check in step 9 is a second guard. A failed compile deletes the old `.ex5` (verified), just as compiling in the editor does; the source is never touched.
 
 **Facts used:** MetaEditor's exit code is ignored, because it was 1 on success and 0 on failure (verified). A command-line compile works while a MetaEditor window is open (verified).
 
 **Output:** only the log's error and warning lines, each with its file and line, then the `Result:` line, then one line `MQL5_RESULT {json}`.
-- At most 50 diagnostic lines are printed, each cut at 300 characters, followed by the total count and a "truncated" note when lines were left out.
+- At most 50 diagnostic lines are printed, each cut at 300 characters, followed by the total count and a "truncated" note when lines were left out. The full log stays on disk in that case (step 11).
 - The compile function also returns these diagnostics, so a calling tester can keep them in its `result.json`.
 - The log's information lines are dropped: "compiling", "including" and about 35 "generating code n%" progress lines. A clean compile then prints about 100 tokens instead of 1,000 or more.
 - The JSON holds status, editor path and build, source, errors, warnings, the artifact path and SHA-256 (only on success), and exit code.
@@ -244,20 +257,23 @@ Never delete recursively, never touch the journals, and never touch any file who
     - each check true/false, the matched system lines, the cleanup list, status and exit code;
     - **headline numbers** read from the report: Total Net Profit, Total Trades, Profit Factor, Expected Payoff, Balance Drawdown Maximal and Equity Drawdown Relative. Each is the raw text of the cell after its label, or null when the label is missing. The labels are the English report's, as v1's report reader used; a terminal in another language gives nulls. They are best-effort and never affect pass or fail.
     - **error lines:** up to 20 lines from this run's appended journals whose message contains `error`, `failed`, `cannot` or `critical`, each cut at 300 characters, so a failure can be read without opening megabyte-sized journals. With them go the total number of matches, a `truncated` flag, and each journal's path with this run's start and end byte. The model can then read more of exactly this run's records in bounded chunks when the summary is not enough. The list is for reading only: pass and fail are decided by the rules above, not by this filtered list.
-    - **compile diagnostics:** in the same bounded form as the compile output: at most 50 lines with the total count. The compile log itself is temporary.
+    - **compile diagnostics:** in the same bounded form as the compile output: at most 50 lines with the total count. On a failed or truncated compile, the full log is kept beside `result.json` as `compile.log`.
+    - **context for each failed check:** up to 10 nearby system records from this run, each cut at 300 characters, with the check that failed. For example, the last records after the test start when no pass record came. A failure explained by a message without an error keyword, such as missing history or an early stop, is therefore still visible. The keyword error lines are only a convenience.
   - a copy of the `.ini`;
-  - the moved reports.
+  - the moved reports;
+  - `compile.log`, only after a failed or truncated compile.
 - Anything kept for recovery is listed by path in `result.json` and left where it is, such as a report that did not move or files left because the job could not be confirmed empty. It is never deleted to tidy up.
 
-The console prints at most five short lines:
+The console prints one structured summary line, `MQL5_RESULT {json}`, and nothing else. It is enough to report a clean run without opening `result.json`, and it holds:
+- status and exit code;
+- compile errors, warnings and the artifact hash;
+- symbol, period, dates and model;
+- the failed checks;
+- cleanup ok or the number of leftovers;
+- the headline numbers;
+- the report and `result.json` paths.
 
-1. status and exit code;
-2. any failed checks, or on a compile failure the error count with its first error line;
-3. the headline numbers;
-4. the report path;
-5. the `result.json` path.
-
-Then it prints one compact line, `MQL5_RESULT {"status":...,"exit_code":...,"result":"<path>"}`. The full detail stays in `result.json` for when it is needed.
+Field names stay readable, not abbreviated. Matched journal records, failure context and recovery details stay in `result.json`, which is opened only when the summary is not enough.
 
 **Notes for `references/strategy-tester.md`:**
 
@@ -420,35 +436,46 @@ Repeat after any terminal upgrade.
 
 **Token efficiency (decided 2026-10-20).** The skill keeps what reaches the model's context small:
 
-- Each reference is read once per task.
-- Compile prints only errors, warnings and the result.
-- The tester prints at most five lines, and puts headline numbers and up to 20 error lines in `result.json`.
-- SKILL.md forbids reading a report or journal whole.
+- **References.** Each is read once per task, and each is a short invocation and result guide.
+- **Compile output.** Compile prints only errors, warnings and the result. The full log stays on disk after a failure or truncation.
+- **Tester output.** The tester prints one structured summary line, which is enough for a clean run. `result.json` holds headline numbers, bounded error lines, the context for each failed check and journal byte ranges, and it is opened only when needed.
+- **No whole files.** SKILL.md forbids reading a report or journal whole.
+- **No repeated work.** The model calls the tester directly instead of compiling first, and reuses files, passages and results until their inputs change.
+- **Lean lookups.** The docs-MCP calls use explicit lean arguments.
 
-Section 12 gives the numbers. The extra code is about 40 lines.
+A second GPT pass on 2026-10-20 suggested these refinements, and none of them gives up evidence or checklist duties. Section 12 gives the numbers. The extra code is about 50 lines.
 
-**Size:** about 730 installed lines plus about 320 lines of repository tooling, around 1,050 in total. This is a provisional estimate, not a limit.
+**Size:** about 745 installed lines plus about 320 lines of repository tooling, around 1,065 in total. This is a provisional estimate, not a limit.
 
 ## 12. Token budget
 
-What reaches the model's context in one compile-and-test task. Estimates use about 4 characters per token. v1 figures come from the installed v1.2.10 files and 43 real `smoke-result.json` files.
+What reaches the model's context in one clean compile-and-test task. Estimates use about 4 characters per token. v1 figures come from the installed v1.2.10 files and 43 real `smoke-result.json` files.
 
 | What the model sees | v1 | v2 |
 |---|---:|---:|
-| Skill description (always listed by both clients) | ~130 | ~80 |
-| `SKILL.md`, when the skill is used | ~2,700 | ~1,500 |
-| Compile guide, once per task (v1: read completely before every compile) | ~1,000 | ~600 |
-| Tester guide, once per task (v1: read completely before every run) | ~3,900 | ~1,300 |
-| Clean compile output (v1: full log with ~35 progress lines; v2: result line and JSON) | ~1,000+ | ~100 |
-| Tester console output | ~50 (a path) | ~150 (at most 5 lines) |
-| Run result when read (v1: `smoke-result.json`, 18 KB on average and up to 37 KB; v2: bounded `result.json`) | ~4,600 | ~800 |
-| **Total for one compile-and-test task** | **~13,000** | **~4,500** |
+| Skill description (always listed by both clients) | ~130 | ~60 |
+| `SKILL.md`, when the skill is used | ~2,700 | ~1,300 |
+| Compile guide, once per task (v1: read completely before every compile) | ~1,000 | ~350 |
+| Tester guide, once per task (v1: read completely before every run) | ~3,900 | ~800 |
+| Compile output (v1: full log with ~35 progress lines; v2: none, because the tester compiles and reports the counts in its summary) | ~1,000+ | ~0 |
+| Tester console output | ~50 (a path) | ~250 (one summary line) |
+| Run result read afterwards (v1: `smoke-result.json`, 18 KB on average and up to 37 KB; v2: not needed on a clean run) | ~4,600 | 0 |
+| **Total, clean run** | **~13,000** | **~2,800** |
+
+A failed run adds about 800–1,500 tokens for v2, because the model then opens `result.json`. A compile on its own prints about 100 tokens when clean. The table leaves out docs-MCP responses, source-file reads and the model's own loops. The lean lookup arguments save roughly 300–1,500 tokens on a lookup-heavy task.
 
 The v2 figures depend on these rules:
 
-- Every printed output is capped: at most 50 compile lines and 5 tester lines. Each diagnostic or error line is cut at 300 characters, with counts and a truncation flag.
-- `result.json` carries the headline report numbers, up to 20 error lines and this run's journal byte ranges, so the model never needs the 500 KB report (~130,000 tokens) or the megabyte-sized journals.
-- SKILL.md forbids reading a report or journal whole, allows only regex captures from a report, and allows only bounded chunks of at most 8 KB from this run's journal range.
-- The docs-first rules stay frugal: status once per task, batched lookups, section reads and reuse of verified passages.
+- **Capped output.** At most 50 compile lines; one tester summary line. Each diagnostic or error line is cut at 300 characters, with counts and a truncation flag. The full compile log stays on disk when anything was cut.
+- **`result.json`.** It carries:
+  - the headline report numbers;
+  - up to 20 error lines;
+  - context for each failed check;
+  - this run's journal byte ranges.
 
-The report trap is unlikely but cannot be ruled out, because a model can still choose to open a file. Measure real token use during the real check and correct this table.
+  So the model never needs the 500 KB report (~130,000 tokens) or the megabyte-sized journals.
+- **No whole files.** SKILL.md forbids reading a report or journal whole. The tester guide allows only regex captures from a report, and only chunks of at most 8 KB from this run's journal range.
+- **Frugal docs lookups.** Status before the first fact; batched lookups with `limit: 1`; focused reads of 1500–3000 characters with no related topics or images; reuse of verified passages.
+- **No repeated work.** The tester compiles; there is no separate compile first. Results are reused until their inputs change.
+
+Savings are never taken by dropping evidence or checklist duties: the checklist stays in SKILL.md, lookups still need a verified passage, and truncated diagnostics stay on disk. The report trap is unlikely but cannot be ruled out, because a model can still choose to open a file. During the real check, measure the clean, warning and failure paths separately with the clients' real token counts, and correct this table.
