@@ -425,6 +425,30 @@ Repeat after any terminal upgrade.
 - The tester prints at most five lines, and puts headline numbers and up to 20 error lines in `result.json`.
 - SKILL.md forbids reading a report or journal whole.
 
-A typical compile-and-test task then costs about 4,000 tokens of instructions and output, against roughly 10,000 or more for v1. Every output the skill prints is bounded, and SKILL.md steers the model away from the ~130,000-token report trap. That keeps the risk small, but it cannot be ruled out, because a model can still choose to read a file. Those numbers are estimates at about 4 characters per token. The extra code is about 40 lines.
+Section 12 gives the numbers. The extra code is about 40 lines.
 
 **Size:** about 730 installed lines plus about 320 lines of repository tooling, around 1,050 in total. This is a provisional estimate, not a limit.
+
+## 12. Token budget
+
+What reaches the model's context in one compile-and-test task. Estimates use about 4 characters per token. v1 figures come from the installed v1.2.10 files and 43 real `smoke-result.json` files.
+
+| What the model sees | v1 | v2 |
+|---|---:|---:|
+| Skill description (always listed by both clients) | ~130 | ~80 |
+| `SKILL.md`, when the skill is used | ~2,700 | ~1,500 |
+| Compile guide, once per task (v1: read completely before every compile) | ~1,000 | ~600 |
+| Tester guide, once per task (v1: read completely before every run) | ~3,900 | ~1,300 |
+| Clean compile output (v1: full log with ~35 progress lines; v2: result line and JSON) | ~1,000+ | ~100 |
+| Tester console output | ~50 (a path) | ~150 (at most 5 lines) |
+| Run result when read (v1: `smoke-result.json`, 18 KB on average and up to 37 KB; v2: bounded `result.json`) | ~4,600 | ~800 |
+| **Total for one compile-and-test task** | **~13,000** | **~4,500** |
+
+The v2 figures depend on these rules:
+
+- Every printed output is capped: at most 50 compile lines and 5 tester lines. Each diagnostic or error line is cut at 300 characters, with counts and a truncation flag.
+- `result.json` carries the headline report numbers, up to 20 error lines and this run's journal byte ranges, so the model never needs the 500 KB report (~130,000 tokens) or the megabyte-sized journals.
+- SKILL.md forbids reading a report or journal whole, allows only regex captures from a report, and allows only bounded chunks of at most 8 KB from this run's journal range.
+- The docs-first rules stay frugal: status once per task, batched lookups, section reads and reuse of verified passages.
+
+The report trap is unlikely but cannot be ruled out, because a model can still choose to open a file. Measure real token use during the real check and correct this table.
