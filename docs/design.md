@@ -1,6 +1,6 @@
 # mql5-coding v2: design
 
-Status: final draft. No skill code changes until this design is approved.
+Status: implemented in v2.0.0 (`skills/mql5-coding`). Facts measured during the build are folded in below.
 
 ## 1. Summary
 
@@ -190,7 +190,7 @@ Optional settings and what happens when they are left out:
 
 The model omits these only for a pure engine smoke check (see "Engine smoke defaults" below). A backtest the user asks for always passes the user's settings.
 
-The script name stays as in v1. There is no preflight mode: with no confirmations, a run performs its gates first and stops before staging anything when one fails. Invalid input gives exit 2. A blocking condition gives exit 4: the terminal is running, there is no single data folder, or another run holds the run lock. Tests always start from source: the tester compiles it with the terminal's own `metaeditor64.exe`.
+The script name stays as in v1. There is no preflight mode: with no confirmations, a run performs its gates first and stops before staging anything when one fails. Invalid input gives exit 2. A blocking condition gives exit 4: no usable terminal (missing, several found or not MT5), the terminal is running, there is no single data folder, or another run holds the run lock. Tests always start from source: the tester compiles it with the terminal's own `metaeditor64.exe`.
 
 **Gates, in order. Each failure stops before anything is staged:**
 
@@ -224,7 +224,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
    - `[Common]`: `NewsEnable=0`.
    - `[Experts]`: `AllowLiveTrading=0`, `AllowDllImport=0`.
    - `[Tester]`:
-     - `Expert=Mql5Smoke\<staged>`, then `ExpertParameters=<staged>.set`, or an empty `[TesterInputs]` for the compiled defaults.
+     - `Expert=Mql5Smoke\<staged>.ex5` (with the extension, the form proven in real runs), then `ExpertParameters=<staged>.set`, or an empty `[TesterInputs]` for the compiled defaults.
      - The symbol, period, dates, model and execution mode, given or defaulted. Deposit, currency and leverage are written only when given.
      - Leverage is written as `Leverage=1:<n>`. Measured on 2026-10-20: MT5 applies `Leverage=1:300`, but ignores a bare `Leverage=200` and keeps the previous run's leverage. v1 wrote the bare form, so its reports showed 1:500 when 100 was requested.
      - Fixed values: `Optimization=0`, `ForwardMode=0`, `Report=<staged>`, `ReplaceReport=1`, `ShutdownTerminal=1`, `UseLocal=1`, `UseRemote=0`, `UseCloud=0`, `Visual=0`.
@@ -250,7 +250,7 @@ All of these must hold:
 - Terminal log, in order: `successfully initialized from start config "<our ini>"`, then `automatic testing started`, then `last test passed with result "successfully finished"`.
 - Tester log: exactly one system test-start record (`testing of Experts\... started with inputs:`) for any expert in the appended evidence. It must start with `<symbol>,<period>: testing of Experts\Mql5Smoke\<staged>.ex5 from <from> 00:00 to <to> 00:00 started with inputs:`.
 - After that record: a system record that starts with `<symbol>,<period>: ` and contains `Test passed in`.
-- In both of those records, `<period>` uses the journal's spelling. The journal writes `D1` as `Daily`, seen in hundreds of real journal records. `W1` is expected to map to `Weekly` and `MN1` to `Monthly`, but neither is verified yet; the real check confirms or corrects them. Minute and hour periods are spelled as given (`M1`, `H1`).
+- In both of those records, `<period>` uses the journal's spelling. The journal writes `D1` as `Daily`, seen in hundreds of real journal records. It writes `W1` as `Weekly` and `MN1` as `Monthly` (measured 2026-10-21). Minute and hour periods are spelled as given (`M1`, `H1`).
 - No system record containing `tester stopped because OnInit returns non-zero`.
 - With `-ExpectedLogMarker`: an application line whose message after the timestamp is exactly the marker. It must come after the test-start record and before the pass record.
 - The terminal exited by itself before the deadline.
@@ -430,13 +430,27 @@ Four groups in `tests/Test-Safety.ps1`, plain PowerShell with no framework. They
 - no new files next to the source
 - the report moved
 - the build, settings and result
-- `W1` and `MN1` journal spellings, and that the report shows the requested leverage
+- that the report shows the requested leverage
 - the English journal phrases the pass rules match, on a terminal set to English
 - that a run with deposit, currency and leverage omitted passes, and its summary shows the values MT5 used
 - the v2 helper's `Add-Type` time, and total runtime under Windows PowerShell 5.1 against PowerShell 7
-- whether `[Experts]` in the terminal's `config\common.ini` is the same before and after the run, which checks whether startup keys persist. If the values differ, restore the original values by hand and treat it as a release blocker. Before release, the tester then saves that section before launch and writes it back in cleanup, and a test covers it.
+- that `[Experts]` in the terminal's `config\common.ini` is the same before and after the run. Measured on 2026-10-21: it is, because startup keys do not persist (a terminal kept `AllowDllImport=1` after runs whose start ini set 0). Repeat this after a terminal upgrade; if it ever differs, restore the values by hand and treat it as a release blocker.
 
 Repeat after any terminal upgrade.
+
+**Real check record, v2.0.0 (2026-10-21).** Claude Code side, on the main MT5 install (build 6258, English), with `tests/Mql5SmokeProbe.mq5` run from the repository folder, whose path has spaces:
+
+| Run | Result |
+|---|---|
+| Fresh marker, `.set` inputs, `-Leverage 100 -Deposit 10000 -Currency USD` | `application_marker_passed` in 9.6 s; report shows 1:100; all nine checks true; matched lines are the English phrases above |
+| Deposit, currency and leverage omitted, compiled defaults | `engine_smoke_passed` in 9.5 s on Windows PowerShell 5.1 and 10.1 s on PowerShell 7; the summary shows the values MT5 used |
+| D1, W1 and MN1 over 2025.01.01-2026.10.01 | all `engine_smoke_passed` (`Daily`, `Weekly`, `Monthly` spellings) |
+| Selected terminal open | exit 4 `blocked`, nothing created; `CloseMainWindow()` closed it in 2.6 s, no MT5 process remained, the rerun passed |
+| Final code, `-Leverage 200`, relative source path | `engine_smoke_passed`; report shows 1:200 |
+
+After every run, cleanup was `ok` and nothing carrying the run id was left anywhere under `%APPDATA%\MetaQuotes`. The run lock was released, the `Mql5Smoke` folder created by the run was removed, and nothing appeared next to the source apart from the `.ex5` build output. `config\common.ini` `[Experts]` was unchanged. `Add-Type` of the helper took 0.28 s on 5.1 and 0.76 s on 7, so 5.1 stays the default and no DLL cache is needed. The summary line is about 760 characters (about 190 tokens).
+
+**Codex side: still to do.** Run the same marker check through Codex after installing. It needs the user's Codex session with permission to start processes; crosscheck keeps GPT read-only, so it could not be run here. Release follows the Claude-first decision (2026-10-21).
 
 ## 11. Decisions and open points
 
@@ -478,10 +492,7 @@ Repeat after any terminal upgrade.
 - freshness from this run's own temporary log plus the last-write check
 - no prefix hashing of journals: the run id in every logged path ties lines to the run
 
-**Open, to confirm in the real check:**
-
-- the `W1`/`MN1` spellings
-- whether startup keys persist
+**Closed by measurement on 2026-10-21:** the `W1`/`MN1` journal spellings (`Weekly`, `Monthly`) and whether startup keys persist (they do not).
 
 **Leverage format (measured 2026-10-20):** `Leverage=1:<n>`, as the docs show. Six short runs of the bundled Moving Average EA on one terminal showed it: `1:300` and `1:50` were applied, while bare `200` and `50` kept the previous run's leverage. This is a silent v1 bug, so v1 reports with a requested leverage may show another value.
 

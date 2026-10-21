@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-tests:
+    name: Safety tests (${{ matrix.shell }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests/Test-Safety.ps1
+        shell: pwsh
+        run: ${{ matrix.shell }} -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/Test-Safety.ps1
