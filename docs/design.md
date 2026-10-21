@@ -7,7 +7,7 @@ Status: final draft. No skill code changes until this design is approved.
 Rewrite the skill around four jobs: documentation-first answers, careful review, compilation and one Strategy Tester smoke run. One skill folder serves Claude Code and Codex. Everything else goes.
 
 - v1 (the MQL5-Coding-Skill repository, v1.2.10): 41 files, about 11,300 lines, about 13,000 words of reference text.
-- Target: 10 installed files, about 730 lines of installed code, about 2,500 words of text.
+- Target: 10 installed files, about 690 lines of installed code, about 2,500 words of text.
 
 The skill is built for a test PC: no real-money accounts and no live trading. Compiling, backtesting and using any MT5 terminal or account on that PC need no confirmation. The scripts protect against mistakes, stale builds, conflicting runs and accidental deletion of the user's files. They do not try to defend against malicious local software or untrusted EAs, and they do not guard live accounts. The README says so for anyone who installs the public skill.
 
@@ -45,7 +45,7 @@ Goes:
 | Generic journal redaction | Only a few matched system lines are kept, and they hold no account data. |
 | `-SyntaxOnly`, `-WarningsAsErrors` | Success always means a real artifact; the report shows warnings and the model decides. |
 | Verified GitHub updater, release manifests, rollback journal | A reviewed checkout plus a copy is enough for a personal skill. |
-| Environment health checker | The tester's preflight checks local tools; the chat's tool list shows whether the MCP loaded. |
+| Environment health checker | Each script checks its own tools before it starts; the chat's tool list shows whether the MCP loaded. |
 | Changelog-style references, focused-review, performance and refactoring notes | Their useful lines move into `SKILL.md`. |
 
 ## 3. Installed files
@@ -56,20 +56,20 @@ Goes:
 | `references/compile.md` | Compile parameters, output, exit codes | ~45 |
 | `references/strategy-tester.md` | Tester gates, settings, evidence, notes, exit codes | ~90 |
 | `scripts/Compile-Mql5.ps1` | Compile entrypoint: parameters, then one call into `Mql5Compile.ps1` | ~50 |
-| `scripts/Invoke-Mt5TesterSmoke.ps1` | Tester entrypoint: parameters, then one call into `Mql5Tester.ps1` | ~70 |
+| `scripts/Invoke-Mt5TesterSmoke.ps1` | Tester entrypoint: parameters, then one call into `Mql5Tester.ps1` | ~60 |
 | `scripts/Mql5Compile.ps1` | Installation discovery and validators, the compile function | ~200 |
-| `scripts/Mql5Tester.ps1` | Data-folder binding, running check, staging, launch, journal rules, cleanup; loads `Mql5Compile.ps1` | ~300 |
+| `scripts/Mql5Tester.ps1` | Data-folder binding, running check, staging, launch, journal rules, cleanup; loads `Mql5Compile.ps1` | ~270 |
 | `scripts/OwnedProcess.cs` | Start suspended, put in a kill-on-close Job Object, resume, wait, kill, confirm empty | ~110 |
 | `agents/openai.yaml` | Codex display name and MCP dependency; Claude ignores it | ~12 |
 | `version.json` | Installed version, for humans | 1 |
 
 The dependency is one-way: the tester library loads the compile library, never the reverse. The native helper is loaded once. Result printing stays in the entrypoints.
 
-Installed script total: about 730 lines.
+Installed script total: about 690 lines.
 
 In the repository, outside the installed folder:
 
-- `install.ps1` (~70 lines) and `tests/Test-Safety.ps1` with its fake programs (~250 lines), so about 1,050 lines in all.
+- `install.ps1` (~70 lines) and `tests/Test-Safety.ps1` with its fake programs (~250 lines), so about 1,010 lines in all.
 - One CI workflow, a short README and one nontrading test EA.
 
 These are estimates, not acceptance criteria. Measure the implementation, and never weaken a check to meet a number.
@@ -149,9 +149,9 @@ Body, in short plain sentences:
 
 ## 6. Strategy Tester smoke run
 
-**Command:** `Invoke-Mt5TesterSmoke.ps1 (-Execute | -PreflightOnly) -SourcePath <file.mq5> [-IncludePath ...] -Symbol -Period -FromDate -ToDate -Model -Deposit -Currency -Leverage -ExecutionMode (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath] [-TimeoutSeconds 300] [-ExpectedLogMarker <MQL5_CODING_PASS:nonce>]`
+**Command:** `Invoke-Mt5TesterSmoke.ps1 -SourcePath <file.mq5> [-IncludePath ...] -Symbol -Period -FromDate -ToDate -Model -Deposit -Currency -Leverage -ExecutionMode (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath] [-TimeoutSeconds 300] [-ExpectedLogMarker <MQL5_CODING_PASS:nonce>]`
 
-The script name, `-Execute` and `-PreflightOnly` stay as in v1. Tests always start from source: the tester compiles it with the terminal's own `metaeditor64.exe`.
+The script name stays as in v1. There is no preflight mode: with no confirmations, a run performs its gates first and stops before staging anything when one fails. Invalid input gives exit 2; a blocking condition (the terminal is running, or there is no single data folder) gives exit 4. Tests always start from source: the tester compiles it with the terminal's own `metaeditor64.exe`.
 
 **Gates, in order. Each failure stops before anything is staged:**
 
@@ -164,9 +164,7 @@ The script name, `-Execute` and `-PreflightOnly` stay as in v1. Tests always sta
 3. **Data folder.** MT5 started with `/config` opens the AppData folder whose `origin.txt` (UTF-16) names its install folder. Exactly one such folder must exist. Zero matches, several matches or an unreadable `origin.txt` block the run.
 4. **Already running.** Any `terminal64.exe` process whose image path equals the selected terminal's full path (case-insensitive) blocks with exit 4. So does a `terminal64.exe` process whose path cannot be read. The script never closes a process; the model closes the terminal when the user's instructions allow, then reruns.
 
-`-PreflightOnly` runs gates 1–4 and creates nothing. Exit 0 means "ready". Its output lists what it did not check: compilation, staging and launch.
-
-**Run (`-Execute`):**
+**Run:**
 
 1. Claim the output folder with a create-only call that fails if it already exists; failure stops with exit 2, so two runs never share an output folder. Hold `<data>\.mql5-coding-smoke.data-lock`, created exclusively with delete-on-close, for the whole run. It is the same file name v1 uses, so old and new runners exclude each other.
 2. Compile the source through the shared compile function with this terminal's `metaeditor64.exe`. Anything but exit 0 stops here with exit 2. Keep the hash the compile returned.
@@ -218,15 +216,15 @@ The run id sits in both the ini path and the expert path, and the lock plus the 
 
 **Cleanup:** it runs in `finally`, after the job is confirmed empty.
 
-1. Copy `<staged>.htm` and its companions (`.png`, `-hst.png`, `-mfemae.png`, `-holding.png`, names verified on real runs) to the output folder.
-   - Delete each original only after its copy's hash matches.
-   - A report that could not be copied stays where it is, is listed in the result, and makes the exit code 2.
+1. Move `<staged>.htm` and its companions (`.png`, `-hst.png`, `-mfemae.png`, `-holding.png`, names verified on real runs) into the output folder.
+   - Move one file at a time with `Move-Item -LiteralPath ... -ErrorAction Stop` and no `-Force`, so nothing is ever overwritten. Writers have stopped by then, so a successful move needs no hash check.
+   - The set is not one atomic operation, especially across drives. Record each destination that succeeded.
+   - On a failure, record where the file now is (source, destination or both), list it in the result, and make the exit code 2. A report that did not move is never deleted.
    - The other cleanup steps still run.
 2. Delete, by literal path, only the files this run created:
    - the staged `.ex5`
    - `MQL5\Profiles\Tester\<staged>.set`
    - the `.ini`
-   - the reports and companions already copied in step 1
    - the tester cache files `Tester\cache\<staged>.*.tst`. The cache is keyed by expert name (verified), so these belong to this run alone.
 3. Remove `Mql5Smoke` only if this run created it and it is now empty.
 
@@ -238,8 +236,8 @@ Never delete recursively, never touch the journals, and never touch any file who
 - Otherwise the output folder holds:
   - `result.json` with settings, terminal path and build, data folder, artifact path and hash, each check true/false, matched system lines, cleanup list, status and exit code;
   - a copy of the `.ini`;
-  - any copied reports.
-- Anything kept for recovery, such as uncopied reports or files left because the job could not be confirmed empty, is listed by path in `result.json` and left where it is. It is never deleted to tidy up.
+  - the moved reports.
+- Anything kept for recovery is listed by path in `result.json` and left where it is, such as a report that did not move or files left because the job could not be confirmed empty. It is never deleted to tidy up.
 
 The console prints a short summary and `MQL5_RESULT {json}`.
 
@@ -249,13 +247,14 @@ The console prints a short summary and `MQL5_RESULT {json}`.
 - Only the `.ex5` is copied, so libraries and `MQL5\Files` data the EA needs must already be in the selected terminal.
 - The default timeout is 300 seconds. A first run on a new symbol or date range may need longer while history synchronizes; raise `-TimeoutSeconds` rather than retrying blindly.
 - Do not open the selected terminal by hand during a run. The running check is only a point-in-time observation.
+- Start a long test as a background command, or give the call a timeout longer than `-TimeoutSeconds`. If the client kills the runner, the Job Object stops MT5 and its agents with it, but that run's staging stays behind.
 - Recommended setup for people who keep a terminal open: a second MT5 install used only for testing, selected with `-TerminalPath`. Installing outside Program Files does not by itself make it portable, so the AppData binding still applies. Start it once normally and log in to a demo account, so `origin.txt` and history exist.
 
 **Exit codes:**
 
 | Exit | Meaning |
 |---:|---|
-| 0 | Smoke passed, or preflight ready |
+| 0 | Smoke passed |
 | 1 | Ran, but a pass rule failed |
 | 2 | Input, compile, tool, evidence or cleanup failure |
 | 3 | Timeout, process tree stopped |
@@ -269,7 +268,10 @@ One C# class, loaded once with `Add-Type` and shared by compile and tester:
 - `AssignProcessToJobObject` on a job with kill-on-close. If assignment fails, kill the suspended child, confirm it is gone, and fail.
 - `ResumeThread`, `WaitForExit(ms)`, `TerminateJob`, `WaitForEmpty(ms)` (the job's active-process count is 0).
 
-This is the one piece of the old native code that is worth keeping. `taskkill /T` misses descendants whose parent already exited, such as tester agents.
+This is the one piece of the old native code that is worth keeping, even on a test PC, for two reasons:
+
+- `taskkill /T` misses descendants whose parent already exited, such as tester agents.
+- When the client kills the runner itself, a kill-on-close job still stops MT5. Plain PowerShell cleanup never runs in that case, so an orphaned terminal would block the next run and could race its evidence or cleanup.
 
 ## 8. Both clients: install and update
 
@@ -302,7 +304,7 @@ If a step fails, run it again; the backup allows a manual restore. There are no 
   - `-CompilationReceiptPath`, `-ExpertPath` and `-ExpectedExpertSha256` → `-SourcePath`
   - `-ExpectedLogMarkerFile` → `-ExpectedLogMarker`
   - `-TerminalDataPath` → derived automatically
-  - `-AcknowledgeSavedAccountRisk` → no longer needed
+  - `-AcknowledgeSavedAccountRisk`, `-Execute` and `-PreflightOnly` → no longer needed; the script just runs
 - **README.** Say that the skill is built for test PCs and starts MT5 with whatever account is saved there.
 - **Leftovers from v1.** New staging uses `Mql5Smoke`. v1 left its `CodexSmoke` staging files, reports and compile receipts in place. v2 does not touch them. Cleaning them is a separate job; prefer sending them to the Recycle Bin.
 - **Versions.** Use git tags, starting at `v2.0.0`.
@@ -327,7 +329,7 @@ Four groups in `tests/Test-Safety.ps1`, plain PowerShell with no framework. They
 4. **Cleanup and journal:**
    - After a fake run, only files carrying the run id are gone.
    - A user's `<name>.set` sentinel keeps its exact bytes, and a user file in the same folders survives.
-   - A staged report held open by another process cannot be copied. It stays in place, is listed in `result.json` and gives exit 2, and the other owned files are still removed.
+   - A staged report held open without delete sharing cannot be moved. It stays in place, is listed in `result.json` and gives exit 2, and the other owned files are still removed. A report that already exists at the destination is not overwritten.
    - Each of these fails the run (exit 1):
      - a tester log with a second test-start record;
      - a real `tester stopped because OnInit returns non-zero` system record;
@@ -338,12 +340,12 @@ Four groups in `tests/Test-Safety.ps1`, plain PowerShell with no framework. They
 
 **Test root:** the entrypoint scripts have no AppData parameter and always use the real `%APPDATA%`. The compile and tester logic live in functions in `Mql5Compile.ps1` and `Mql5Tester.ps1`; the tests dot-source them and call those functions with a test root, so the tests never touch the real AppData.
 
-**Real check before release:** on a PC with MT5 (build 6258 at design time), compile and run the nontrading test EA from a folder whose path has spaces, with a fresh marker, in both Claude Code and Codex. Confirm and record:
+**Real check, required before release:** on a PC with MT5 (build 6258 at design time), compile and run the nontrading test EA from a folder whose path has spaces, with a fresh marker, in both Claude Code and Codex. The journal rules prove the engine finished; they do not prove every setting was applied, so these items are release requirements. Confirm and record:
 
 - the pass status
 - the staging gone
 - no new files next to the source
-- the report copied
+- the report moved
 - the build, settings and result
 - `W1` and `MN1` journal spellings, and that the report shows the requested leverage
 - whether `[Experts]` in the terminal's `config\common.ini` is the same before and after the run, which checks whether startup keys persist
@@ -364,7 +366,8 @@ Repeat after any terminal upgrade.
 **Adopted from GPT and Fable 5.1:**
 
 - compile-to-stage hash binding
-- a preflight that creates nothing and lists what it did not check
+- no preflight mode at all (`-PreflightOnly` and `-Execute` dropped): with no confirmations, a run's own gates stop it before staging
+- moving reports one at a time without overwriting, instead of copy, hash and delete
 - source-only testing
 - dropping `-TerminalDataPath`
 - splitting the shared script by job
@@ -377,11 +380,12 @@ Repeat after any terminal upgrade.
 
 - a larger matrix of recovery-failure tests, because those failures cannot really be produced and the tests would only test the fakes
 - dropping the compile lock, because it is under ten lines and stops two clients compiling the same output at once
+- replacing the Job Object helper with `taskkill /T` plus a sweep of tester agents (proposed by Claude, rejected after GPT's review). Only a kill-on-close job stops MT5 when the client kills the runner, and `taskkill /T` cannot reach descendants whose parent already exited. A leftover terminal would block the next run and could race evidence and cleanup.
 
 **Kept from earlier reviews:**
 
 - source mode compiles with the terminal's own MetaEditor
-- the script name and `-Execute`/`-PreflightOnly` stay
+- the script name stays
 - a small Job Object helper
 - unique staged names
 - the v1-compatible lock file
@@ -396,4 +400,4 @@ Repeat after any terminal upgrade.
 
 **CI against MT5:** none. Hosted CI has no MT5; the real check is manual and recorded.
 
-**Size:** about 730 installed lines plus about 320 lines of repository tooling, around 1,050 in total. This is a provisional estimate, not a limit.
+**Size:** about 690 installed lines plus about 320 lines of repository tooling, around 1,010 in total. This is a provisional estimate, not a limit.
