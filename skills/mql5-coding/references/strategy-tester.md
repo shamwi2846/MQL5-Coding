@@ -39,7 +39,7 @@ A pass never proves strategy correctness, profitability or full-date coverage.
 **Notes:**
 - A failed compile deletes the `.ex5` next to the source, as in MetaEditor; the source is never touched.
 - The EA runs as `<name>-s<10 hex>` (`MQL_PROGRAM_NAME`), which changes name-based licensing and file or global-variable prefixes.
-- Only the `.ex5` is copied: libraries and `MQL5\Files` data the EA needs must already be in the selected terminal.
+- Only the `.ex5` (and the `-SetPath` file) is copied: libraries and `MQL5\Files` data the EA needs must already be in the selected terminal.
 - A first run on a new symbol or date range may need longer for history sync: raise `-TimeoutSeconds` instead of retrying.
 - MT5 must run in English: the pass rules match English journal phrases. Otherwise the run ends with `journal_phrases_not_found`.
 - Do not open the selected terminal by hand during a run.
