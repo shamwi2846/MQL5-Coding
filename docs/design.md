@@ -218,7 +218,7 @@ All of these must hold:
 - Terminal log, in order: `successfully initialized from start config "<our ini>"`, then `automatic testing started`, then `last test passed with result "successfully finished"`.
 - Tester log: exactly one system test-start record (`testing of Experts\... started with inputs:`) for any expert in the appended evidence. It must start with `<symbol>,<period>: testing of Experts\Mql5Smoke\<staged>.ex5 from <from> 00:00 to <to> 00:00 started with inputs:`.
 - After that record: a system record that starts with `<symbol>,<period>: ` and contains `Test passed in`.
-- In both of those records, `<period>` uses the journal's spelling. The journal writes `D1` as `Daily`, seen in hundreds of real journal records. `W1` maps to `Weekly` and `MN1` to `Monthly`; those two are confirmed in the real check. Minute and hour periods are spelled as given (`M1`, `H1`).
+- In both of those records, `<period>` uses the journal's spelling. The journal writes `D1` as `Daily`, seen in hundreds of real journal records. `W1` is expected to map to `Weekly` and `MN1` to `Monthly`, but neither is verified yet; the real check confirms or corrects them. Minute and hour periods are spelled as given (`M1`, `H1`).
 - No system record containing `tester stopped because OnInit returns non-zero`.
 - With `-ExpectedLogMarker`: an application line whose message after the timestamp is exactly the marker. It must come after the test-start record and before the pass record.
 - The terminal exited by itself before the deadline.
@@ -382,7 +382,7 @@ Four groups in `tests/Test-Safety.ps1`, plain PowerShell with no framework. They
 - the report moved
 - the build, settings and result
 - `W1` and `MN1` journal spellings, and that the report shows the requested leverage
-- whether `[Experts]` in the terminal's `config\common.ini` is the same before and after the run, which checks whether startup keys persist
+- whether `[Experts]` in the terminal's `config\common.ini` is the same before and after the run, which checks whether startup keys persist. If the values differ, restore the original values by hand and treat it as a release blocker. Before release, the tester then saves that section before launch and writes it back in cleanup, and a test covers it.
 
 Repeat after any terminal upgrade.
 
