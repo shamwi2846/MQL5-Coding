@@ -7,7 +7,7 @@ description: Write, review, explain, debug, compile and backtest MetaTrader 5 MQ
 
 ## Scope
 
-MetaTrader 5 and MQL5 only: Expert Advisors, indicators, scripts, services, libraries, `.mq5`, `.mqh`, `.ex5`. MQL4, MT4, `.mq4` and `.ex4` are out of scope. The scripts live in the `scripts` folder next to this file. Use the MCP tool names your client lists (Claude Code shows them as `mcp__mql5-chm__...`).
+MT5/MQL5 only: Expert Advisors, indicators, scripts, services and libraries (`.mq5`, `.mqh`, `.ex5`); not MQL4/MT4 (`.mq4`, `.ex4`). The scripts are in the `scripts` folder next to this file. Use the MCP tool names your client lists (Claude Code: `mcp__mql5-chm__...`).
 
 ## Intent
 
@@ -56,19 +56,19 @@ State symptom, cause, impact and evidence separately.
 
 ## Validate
 
-- Compile every affected `.mq5`, including consumers of a changed `.mqh`. Find them by searching the project for the include's file name, then repeat the search for each header that includes it, until every `.mq5` at the end of the chain is found. Report any consumer you could not resolve.
-- When the task also needs a test, call the tester for the EA under test directly: it compiles that source itself, so do not compile it first. Compile every other affected `.mq5` separately.
-- Recompile only after a change to the source, an include or another build input. Reuse files already read and run results until their inputs change.
-- Read only the guide for the script you call, once per task: [strategy-tester.md](references/strategy-tester.md) for a test (it covers the compile fields too), [compile.md](references/compile.md) only when calling `Compile-Mql5.ps1` on its own.
-- Compiling a file inside a running terminal's `MQL5` folder makes that terminal reload any chart running it (`REASON_RECOMPILE`).
+- Compile every affected `.mq5`. For a changed `.mqh`, search the project for its file name, then repeat for each header that includes it, until every `.mq5` consumer is found; report any you could not resolve.
+- For a test, call the tester directly on the EA under test (it compiles that source itself); compile the other affected `.mq5` files separately.
+- Recompile only after a build input changes (source, include or other input). Reuse files read and run results until their inputs change.
+- Read each guide once per task, only for the script you call: [strategy-tester.md](references/strategy-tester.md) for a test, [compile.md](references/compile.md) for `Compile-Mql5.ps1` on its own.
+- Compiling inside a running terminal's `MQL5` folder reloads any chart running that program (`REASON_RECOMPILE`).
 
 ## Testing
 
 - The tester runs Expert Advisors only. Indicators, scripts and services are validated by compiling.
 - Never run an `.ex5` the user did not build or vouch for. Building it here does not make it trustworthy: the EA runs with the tester agent's file and network access.
 - Pass markers go only in a separate test EA. Never edit the user's EA just to test it, unless the user asks or it already has a self-test. A user's EA gets the plain engine smoke test.
-- Use the tester's `MQL5_RESULT` summary line first; open `result.json` only when it is not enough. Never read a report or journal file whole: a report is about 500 KB (roughly 130,000 tokens). The tester guide gives the bounded way to read more.
-- If the selected terminal is already running, the tester refuses (exit 4). When the user's instructions allow, close it gracefully and rerun; otherwise ask. The tester guide says how.
+- Start with the `MQL5_RESULT` line; open `result.json` only when it is not enough. Never read a report (about 130,000 tokens) or a journal whole; use the tester guide's bounded reads.
+- A running selected terminal gives exit 4: when the user's instructions allow, close it gracefully as the tester guide says and rerun; otherwise ask.
 
 ## Report
 

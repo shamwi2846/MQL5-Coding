@@ -550,20 +550,24 @@ A second GPT pass on 2026-10-20 suggested these refinements, and none of them gi
 
 What reaches the model's context in one clean compile-and-test task. Estimates use about 4 characters per token. v1 figures come from the installed v1.2.10 files and 43 real `smoke-result.json` files.
 
-| What the model sees | v1 | v2 |
-|---|---:|---:|
-| Skill description (always listed by both clients) | ~130 | ~60 |
-| `SKILL.md`, when the skill is used | ~2,700 | ~1,340 |
-| Compile guide (v1: read completely before every compile; v2: not read for a test, because the tester guide covers it) | ~1,000 | 0 |
-| Tester guide, once per task (v1: read completely before every run) | ~3,900 | ~840 |
-| Compile output (v1: full log with ~35 progress lines; v2: none, because the tester compiles and reports the counts in its summary) | ~1,000+ | ~0 |
-| Tester console output | ~50 (a path) | ~260 (one summary line) |
-| Run result read afterwards (v1: `smoke-result.json`, 18 KB on average and up to 37 KB; v2: not needed on a clean run) | ~4,600 | 0 |
-| **Total, clean run** | **~13,000** | **~2,500** |
+| What the model sees | v1 | v2 estimate | v2 measured |
+|---|---:|---:|---:|
+| Skill description (always listed by both clients) | ~130 | ~60 | ~56 |
+| `SKILL.md`, when the skill is used | ~2,700 | ~1,340 | ~1,570 |
+| Compile guide (v1: read completely before every compile; v2: not read for a test, because the tester guide covers it) | ~1,000 | 0 | 0 |
+| Tester guide, once per task (v1: read completely before every run) | ~3,900 | ~840 | ~1,330 |
+| Compile output (v1: full log with ~35 progress lines; v2: none, because the tester compiles and reports the counts in its summary) | ~1,000+ | ~0 | 0 |
+| Tester console output | ~50 (a path) | ~260 (one summary line) | ~185 |
+| Run result read afterwards (v1: `smoke-result.json`, 18 KB on average and up to 37 KB; v2: not needed on a clean run) | ~4,600 | 0 | 0 |
+| **Total, clean run** | **~13,000** | **~2,500** | **~3,140** |
 
-This table is the current v2 estimate. It supersedes the earlier figures of about 4,500, 2,800 and 2,450 tokens in this design's history.
+The measured column is the shipped v2.0.x, after the token review of 2026-10-21. The guides grew past the estimate with rules the reviews added: warnings, the failed-compile note, bounded reading and the exit-4 procedure. Cutting them back to the estimate would drop rules the model needs.
 
-A failed run adds about 800–1,500 tokens for v2, because the model then opens `result.json`. A compile on its own prints about 100 tokens when clean. The table leaves out docs-MCP responses, source-file reads and the model's own loops. The lean lookup arguments save roughly 300–1,500 tokens on a lookup-heavy task.
+These figures are the skill's fixed overhead for one task. They leave out docs-MCP responses, source-file reads and the model's own steps. In the Codex real check, the whole task took 123 s, against 10-14 s of runner time.
+- **A pass with compile warnings** adds the warning lines read from `result.json`, typically 100-500 tokens.
+- **A failed run** adds opening `result.json`: about 1,600 tokens in a measured example, more when the diagnostics and failure context are long.
+- **A compile on its own** prints about 110 tokens when clean.
+- **Lookups:** the lean arguments save roughly 300-1,500 tokens on a lookup-heavy task.
 
 The v2 figures depend on these rules:
 
