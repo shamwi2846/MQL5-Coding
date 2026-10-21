@@ -9,7 +9,7 @@ Rewrite the skill around four jobs: documentation-first answers, careful review,
 - v1 (the MQL5-Coding-Skill repository, v1.2.10): 41 files, about 11,300 lines, about 13,000 words of reference text.
 - Target: 10 installed files, about 745 lines of installed code, about 2,000 words of text.
 
-The skill is built for a test PC: no real-money accounts and no live trading. Compiling, backtesting and using any MT5 terminal or account on that PC need no confirmation. The scripts protect against mistakes, stale builds, conflicting runs and accidental deletion of the user's files. They do not try to defend against malicious local software or untrusted EAs, and they do not guard live accounts. The README says so for anyone who installs the public skill.
+The skill is built for a test PC: no real-money accounts and no live trading. Compiling, backtesting and using any MT5 terminal or account on that PC need no confirmation. The scripts protect against mistakes, stale builds, conflicting runs and accidental deletion of the user's files. The one exception is deliberate: a failed compile can delete the existing `.ex5` build output, just as compiling in MetaEditor does. The source is never touched, and the `.ex5` is rebuilt by the next successful compile. They do not try to defend against malicious local software or untrusted EAs, and they do not guard live accounts. The README says so for anyone who installs the public skill.
 
 ## 2. What stays and what goes
 
@@ -189,7 +189,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
 **Run:**
 
 1. Claim the output folder with a create-only call that fails if it already exists; failure stops with exit 2, so two runs never share an output folder. Hold `<data>\.mql5-coding-smoke.data-lock`, created exclusively with delete-on-close, for the whole run. It is the same file name v1 uses, so old and new runners exclude each other.
-2. Compile the source through the shared compile function with this terminal's `metaeditor64.exe`. Anything but exit 0 stops here with exit 2. Keep the hash the compile returned.
+2. Compile the source through the shared compile function with this terminal's `metaeditor64.exe`. Any compile result other than 0 stops here with tester exit 2, including a compile timeout (compile exit 3). `result.json` records the compile's own exit code and status in its compile section. Tester exit 3 is reserved for a timeout after MT5 is launched. Keep the hash the compile returned.
 3. Create a run id: `s` plus 10 random hex characters. The staged name is `<name>-<run-id>`. The tester saves the last inputs used to `MQL5\Profiles\Tester\<expert name>.set`; a v1 run, staged under the real name, was seen overwriting a user's preset this way. A unique staged name leaves the user's presets alone.
 4. Copy the `.ex5` to `MQL5\Experts\Mql5Smoke\<staged>.ex5`. The copy's hash must equal the hash from step 2, otherwise stop with exit 2. Create `Mql5Smoke` if it is missing, and note that this run created it.
 5. Copy the `.set`, when one is given, to `MQL5\Profiles\Tester\<staged>.set`. This is the same file the tester's own auto-save writes, so the run owns exactly one preset file.
