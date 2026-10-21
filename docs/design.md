@@ -201,7 +201,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
      - `-Deposit` uses invariant digits with an optional `.` fraction, from 1 to 1,000,000,000.
      - `-Currency` is 3 to 8 uppercase letters.
      - `-Leverage` is an integer from 1 to 5000.
-     - `-ExecutionMode` is an integer from −1 to 600,000: −1 is a random delay, 0 normal, and a positive value a delay in milliseconds, with MT5's documented maximum of 600,000.
+     - `-ExecutionMode` is an integer from −1 to 600,000: −1 is a random delay, 0 normal, and a positive value a delay in milliseconds, with MT5's documented maximum of 600,000. No check ties it to the model: with model 2 (open prices), MT5 drops the delay, logs "execution delay discarded because of open prices testing mode" and still runs the test (measured).
    - Any invalid value stops with exit 2 before the startup file is written.
    - Dates use `YYYY.MM.DD`, with to after from. Both are given or neither is; when neither is given, the defaults above apply.
    - Exactly one EA input choice is allowed.
@@ -226,6 +226,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
    - `[Tester]`:
      - `Expert=Mql5Smoke\<staged>`, then `ExpertParameters=<staged>.set`, or an empty `[TesterInputs]` for the compiled defaults.
      - The symbol, period, dates, model and execution mode, given or defaulted. Deposit, currency and leverage are written only when given.
+     - Leverage is written as `Leverage=1:<n>`. Measured on 2026-10-20: MT5 applies `Leverage=1:300`, but ignores a bare `Leverage=200` and keeps the previous run's leverage. v1 wrote the bare form, so its reports showed 1:500 when 100 was requested.
      - Fixed values: `Optimization=0`, `ForwardMode=0`, `Report=<staged>`, `ReplaceReport=1`, `ShutdownTerminal=1`, `UseLocal=1`, `UseRemote=0`, `UseCloud=0`, `Visual=0`.
 
    No login, password or server key is ever written.
@@ -402,7 +403,7 @@ Four groups in `tests/Test-Safety.ps1`, plain PowerShell with no framework. They
    - A symbol containing a line break or `=` is rejected.
    - `-MetaEditorPath` pointing at a terminal fake returns exit 2, and nothing starts.
    - Default dates with no dates given: on 2026-01-15 they are `2025.12.01` to `2026.01.01` (the January rollover); on 2026-03-10 they are `2026.02.01` to `2026.03.01`.
-   - With deposit, currency and leverage omitted, the ini has none of those keys, and execution mode is `0`.
+   - With deposit, currency and leverage omitted, the ini has none of those keys, and execution mode is `0`. With `-Leverage 100` it has `Leverage=1:100`.
 3. **Stale artifact:**
    - A fake editor that writes no log returns 2 and never stages. So does one that writes a valid UTF-16 `Result: 0 errors, 0 warnings` line but leaves the `.ex5` untouched.
    - A fake editor that exits after starting a child that writes the log and `.ex5` later is waited for. The result is read only after the child ends.
@@ -479,9 +480,10 @@ Repeat after any terminal upgrade.
 
 **Open, to confirm in the real check:**
 
-- the leverage format: the docs show `Leverage=1:100`, while v1 writes `Leverage=100` and passed many real runs, so keep the proven form and confirm the report shows the requested value
 - the `W1`/`MN1` spellings
 - whether startup keys persist
+
+**Leverage format (measured 2026-10-20):** `Leverage=1:<n>`, as the docs show. Six short runs of the bundled Moving Average EA on one terminal showed it: `1:300` and `1:50` were applied, while bare `200` and `50` kept the previous run's leverage. This is a silent v1 bug, so v1 reports with a requested leverage may show another value.
 
 **CI against MT5:** none. Hosted CI has no MT5; the real check is manual and recorded.
 
