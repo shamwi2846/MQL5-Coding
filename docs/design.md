@@ -65,6 +65,8 @@ Goes:
 
 The dependency is one-way: the tester library loads the compile library, never the reverse. The native helper is loaded once. Result printing stays in the entrypoints.
 
+The guides document every call as `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <script> ...`. Then a heavy user profile cannot slow each call, and nothing can stop to wait for input.
+
 Installed script total: about 745 lines.
 
 In the repository, outside the installed folder:
@@ -97,8 +99,8 @@ Body, in short plain sentences. Everything a pure review needs stays here; teste
 6. **Validate.**
    - Compile every affected `.mq5`, including consumers of a changed `.mqh`.
    - When the task also needs a test, call the tester directly: it compiles the source itself, so do not compile separately first.
-   - Recompile only after an edit. Reuse files already read and run results until their inputs change.
-   - Read `references/compile.md` before the first compile of a task and `references/strategy-tester.md` before the first tester run; once per task is enough.
+   - Recompile only after a change to the source, an include or another build input. Reuse files already read and run results until their inputs change.
+   - Read only the guide for the script you call, once per task. `references/strategy-tester.md` covers a test, including its compile-result fields. Read `references/compile.md` only when calling `Compile-Mql5.ps1` on its own.
    - Compiling a file inside a running terminal's `MQL5` folder makes that terminal reload any chart running it (`REASON_RECOMPILE`).
 7. **Testing.**
    - Never run an `.ex5` the user did not build or vouch for. Building it here does not make it trustworthy: the EA runs with the tester agent's file and network access.
@@ -180,7 +182,9 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
    - The output folder must not exist, and its parent must be writable.
 2. **Terminal.** Take `-TerminalPath` if given; otherwise use the unique installation, as for compilation. It must be a file named `terminal64.exe` with major version 5.
 3. **Data folder.** MT5 started with `/config` opens the AppData folder whose `origin.txt` (UTF-16) names its install folder. Exactly one such folder must exist. Zero matches, several matches or an unreadable `origin.txt` block the run.
-4. **Already running.** Any `terminal64.exe` process whose image path equals the selected terminal's full path (case-insensitive) blocks with exit 4. So does a `terminal64.exe` process whose path cannot be read. The script never closes a process; the model closes the terminal when the user's instructions allow, then reruns.
+4. **Already running.** Any `terminal64.exe` process whose image path equals the selected terminal's full path (case-insensitive) blocks with exit 4. So does a `terminal64.exe` process whose path cannot be read.
+   - Use `Get-Process -Name terminal64` (about 20 ms), not CIM (about 150 ms), and inspect every matching process.
+   - An access error or a missing path counts as "cannot be read". It never becomes an empty result. The script never closes a process; the model closes the terminal when the user's instructions allow, then reruns.
 
 **Run:**
 
@@ -280,6 +284,11 @@ Field names stay readable, not abbreviated. Matched journal records, failure con
 - During a smoke run the EA's `MQL_PROGRAM_NAME` is the staged name `<name>-<run-id>`. An EA that checks its own name, for example for licensing or for file and global-variable prefixes, behaves differently.
 - Only the `.ex5` is copied, so libraries and `MQL5\Files` data the EA needs must already be in the selected terminal.
 - The default timeout is 300 seconds. A first run on a new symbol or date range may need longer while history synchronizes; raise `-TimeoutSeconds` rather than retrying blindly.
+- **Engine smoke defaults, for speed.** These apply when the user asks only whether the EA starts, runs and finishes in the tester, and gives no dates or model:
+  - Use the last complete calendar month and model 1 (1-minute OHLC). That is far faster than a year of every-tick data.
+  - Every other setting comes from the user or the project as usual.
+  - Report the settings actually used; the verdict stays `engine_smoke_passed`.
+  - Never use these defaults to judge strategy behavior or results; a backtest the user asks for always uses their settings.
 - Do not open the selected terminal by hand during a run. The running check is only a point-in-time observation.
 - Start a long test as a background command, or give the call a timeout longer than `-TimeoutSeconds`. If the client kills the runner, the Job Object stops MT5 and its agents with it, but that run's staging stays behind.
 - Recommended setup for people who keep a terminal open: a second MT5 install used only for testing, selected with `-TerminalPath`. Installing outside Program Files does not by itself make it portable, so the AppData binding still applies. Start it once normally and log in to a demo account, so `origin.txt` and history exist.
@@ -382,6 +391,7 @@ Four groups in `tests/Test-Safety.ps1`, plain PowerShell with no framework. They
 - the report moved
 - the build, settings and result
 - `W1` and `MN1` journal spellings, and that the report shows the requested leverage
+- the v2 helper's `Add-Type` time, and total runtime under Windows PowerShell 5.1 against PowerShell 7
 - whether `[Experts]` in the terminal's `config\common.ini` is the same before and after the run, which checks whether startup keys persist. If the values differ, restore the original values by hand and treat it as a release blocker. Before release, the tester then saves that section before launch and writes it back in cleanup, and a test covers it.
 
 Repeat after any terminal upgrade.
@@ -434,6 +444,26 @@ Repeat after any terminal upgrade.
 
 **CI against MT5:** none. Hosted CI has no MT5; the real check is manual and recorded.
 
+**Speed (decided 2026-10-20, with GPT).** Measured on the user's PC:
+- loading a C# helper with `Add-Type` costs about 1.0 s in PowerShell 7 and about 0.4 s in 5.1 (with v1's large helper);
+- `Get-CimInstance` takes 150 ms against 20 ms for `Get-Process`;
+- a one-year M1 smoke run takes about 24 s, of which about 8.5 s is terminal and agent startup and 5.5 s is the test.
+
+Adopted:
+- `Get-Process` for the running check;
+- documented `-NoProfile -NonInteractive` calls;
+- engine smoke defaults (last complete month, model 1) only for a pure start/run/finish check with no settings given;
+- reading only the guide for the script being called;
+- recompiling only after a change to any build input;
+- running long tests in the background.
+
+Rejected:
+- skipping recompiles when the source looks unchanged, because includes can change;
+- parallel tests on several terminals, which add no saving for one smoke run and too much complexity;
+- caching the compiled helper as a DLL, for now. It adds persistent state and failure paths, and the saving is measured only on v1's 1,192-line helper. Measure v2's ~110-line helper first.
+
+**Open, to measure in the real check:** `Add-Type` time of the v2 helper, and total runtime in Windows PowerShell 5.1 against PowerShell 7. If 5.1 is clearly faster and gives the same results, make it the documented default; that needs no cache.
+
 **Token efficiency (decided 2026-10-20).** The skill keeps what reaches the model's context small:
 
 - **References.** Each is read once per task, and each is a short invocation and result guide.
@@ -455,12 +485,12 @@ What reaches the model's context in one clean compile-and-test task. Estimates u
 |---|---:|---:|
 | Skill description (always listed by both clients) | ~130 | ~60 |
 | `SKILL.md`, when the skill is used | ~2,700 | ~1,300 |
-| Compile guide, once per task (v1: read completely before every compile) | ~1,000 | ~350 |
+| Compile guide (v1: read completely before every compile; v2: not read for a test, because the tester guide covers it) | ~1,000 | 0 |
 | Tester guide, once per task (v1: read completely before every run) | ~3,900 | ~800 |
 | Compile output (v1: full log with ~35 progress lines; v2: none, because the tester compiles and reports the counts in its summary) | ~1,000+ | ~0 |
 | Tester console output | ~50 (a path) | ~250 (one summary line) |
 | Run result read afterwards (v1: `smoke-result.json`, 18 KB on average and up to 37 KB; v2: not needed on a clean run) | ~4,600 | 0 |
-| **Total, clean run** | **~13,000** | **~2,800** |
+| **Total, clean run** | **~13,000** | **~2,450** |
 
 A failed run adds about 800–1,500 tokens for v2, because the model then opens `result.json`. A compile on its own prints about 100 tokens when clean. The table leaves out docs-MCP responses, source-file reads and the model's own loops. The lean lookup arguments save roughly 300–1,500 tokens on a lookup-heavy task.
 
