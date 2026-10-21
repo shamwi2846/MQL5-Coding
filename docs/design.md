@@ -195,7 +195,14 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
 **Gates, in order. Each failure stops before anything is staged:**
 
 1. **Inputs.** Validate every setting.
-   - Symbol, period and, when given, currency must hold no line breaks, `=`, `;` or path separators.
+   - Symbol and period must hold no line breaks, `=`, `;` or path separators. The period uses only letters, digits and `_`.
+   - When given, each value must fit its range, as in v1:
+     - `-Model` is an integer from 0 to 4.
+     - `-Deposit` uses invariant digits with an optional `.` fraction, from 1 to 1,000,000,000.
+     - `-Currency` is 3 to 8 uppercase letters.
+     - `-Leverage` is an integer from 1 to 5000.
+     - `-ExecutionMode` is an integer from −1 to 600,000: −1 is a random delay, 0 normal, and a positive value a delay in milliseconds, with MT5's documented maximum of 600,000.
+   - Any invalid value stops with exit 2 before the startup file is written.
    - Dates use `YYYY.MM.DD`, with to after from. Both are given or neither is; when neither is given, the defaults above apply.
    - Exactly one EA input choice is allowed.
    - The output folder must not exist, and its parent must be writable.
