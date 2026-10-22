@@ -15,7 +15,7 @@ The skill is built for a test PC: no real-money accounts and no live trading. Co
 
 Stays, because each item makes results correct or protects the user's files:
 
-- MQL5 docs (the `mql5-chm` MCP) first, the exact "Not verified in the installed MQL5 CHM" fallback, citations.
+- MQL5 docs (the `mql5-docs` MCP) first, the exact "Not verified in the installed MQL5 docs" fallback, citations.
 - Classify before fixing; read the evidence before diagnosing; the review checklist; never silently change strategy, risk or order logic.
 - MetaEditor quoting (`/compile:"path"`, never the whole token quoted).
 - Success only from this run's "Result: N errors, M warnings" line plus a freshly written .ex5.
@@ -83,19 +83,18 @@ These are estimates, not acceptance criteria. Measure the implementation, and ne
 
 Frontmatter description, short and discriminating, with full trigger coverage:
 
-> Write, review, explain, debug, compile and backtest MetaTrader 5 MQL5 code (EAs, indicators, scripts, services, libraries; .mq5/.mqh/.ex5) on Windows, checking MQL5 facts in the mql5-chm docs first. Not MQL4/MT4.
+> Write, review, explain, debug, compile and backtest MetaTrader 5 MQL5 code (EAs, indicators, scripts, services, libraries; .mq5/.mqh/.ex5) on Windows, checking MQL5 facts in the mql5-docs MCP first. Not MQL4/MT4.
 
 Body, in short plain sentences. Everything a pure review needs stays here; tester procedures live in the tester guide.
 
-1. **Scope.** MT5 and MQL5 only; no MQL4. Scripts live in the `scripts` folder next to this file. Use the MCP tool names the client lists (Claude shows `mcp__mql5-chm__...`).
+1. **Scope.** MT5 and MQL5 only; no MQL4. Scripts live in the `scripts` folder next to this file. Use the MCP tool names the client lists (Claude Code `mcp__mql5-docs__mql5_find`, Codex `mcp__mql5_docs__mql5_find`).
 2. **Intent.** Review and explanation never edit. Diagnosis finds the evidenced cause and fixes only when asked. Changes are the smallest safe change. Never silently add or change entries, exits, stops, targets, sizing, retries, directions or position management. Never place trades outside the Strategy Tester (demo accounts included), move money or enter credentials.
 3. **Docs first.**
-   - **Status.** Before the first MQL5 fact in a task, call `mql5_chm_status` once.
-   - **Lookups.** For several names, make one `mql5_chm_lookup_identifiers` call with `source: "mql5"` and `limit: 1`. For one name, use `mql5_chm_search` with `source: "mql5"`, `limit: 1` and `expand: false`. Only an exact match whose passage contains the identifier as a whole token counts; approximate matches never do.
-   - **Reads.** Use `mql5_chm_read` with `section_id` or `focus`, `max_chars` of 1500–3000, `include_related: false` and `include_images: false`. Follow `next_cursor` when the passage does not yet settle the claim; a small first excerpt is never a reason to stop.
-   - **Reuse.** Keep a verified passage and never read it twice.
-   - **Citations.** Give the title, topic id and section id, plus the revision once per answer.
-   - **Fallback.** When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 CHM`, then use and cite official MetaQuotes pages. Never fill gaps from memory. If no `mql5_chm_*` tools are listed, say so and carry on with the official pages, using the same exact phrase for API facts; a missing MCP does not stall review work.
+   - **Find.** One `mql5_find` call with every name needed (up to 16 names, page titles or questions). A brief or cut answer names the call for the rest; make it before relying on what it leaves out. How to call the tools is in their own descriptions, so the skill says only when to use them.
+   - **Evidence.** A claim needs returned text that states it. `=` proves only the name match; `~` is a search result and never identifies an API.
+   - **Reuse.** Keep text already read while the index tag is unchanged and never read it twice.
+   - **Citations.** Give the page title and id, plus the docs version once per answer.
+   - **Fallback.** When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 docs`, then use and cite official MetaQuotes pages; check them too when freshness matters. Never fill gaps from memory. If no `mql5_find` tool is listed, say so and carry on with the official pages, using the same exact phrase for API facts; a missing MCP does not stall review work.
    - **Logs.** They describe the local run, not the API.
 4. **Evidence and classification.** Read the compiler log and the journals before diagnosing a runtime problem. When they are missing, report that gap instead of presenting a source-based guess as the cause. Classify the problem as one of: compilation, initialization/runtime, indicators/timeseries, trade execution, tester/environment, strategy logic. State symptom, cause, impact and evidence separately.
 5. **Review checklist.** Event lifecycle; handle creation, readiness, counts and release; buffer direction and completed bars; volume min/max/step; digits, tick size, stop and freeze levels; trade results; netting versus hedging; symbol/magic/direction ownership filters; nothing unrelated renamed or reformatted.
@@ -113,7 +112,7 @@ Body, in short plain sentences. Everything a pure review needs stays here; teste
    - Pass markers go only in a separate test EA. Never edit the user's EA just to test it, unless the user asks or it already has a self-test. A user's EA gets the plain engine smoke test.
    - Use the tester's summary line first. Open `result.json` only when the summary is not enough. Never read a report or journal file whole: a report is about 500 KB, roughly 130,000 tokens. The tester guide gives the bounded way to get more.
    - If the selected terminal is already running, the tester refuses. When the user's instructions allow, close it gracefully and rerun; otherwise ask. The tester guide says how.
-8. **Report.** Outcome first; files and behavior changed; evidenced cause; CHM citations; compile result with errors, warnings and artifact; tester settings, result and output folder; checks not run; remaining uncertainty. A smoke pass never implies profitability or live safety.
+8. **Report.** Outcome first; files and behavior changed; evidenced cause; docs citations; compile result with errors, warnings and artifact; tester settings, result and output folder; checks not run; remaining uncertainty. A smoke pass never implies profitability or live safety.
 
 `references/` files are invocation and result guides only: arguments, defaults, exit codes, output fields and the caveats a caller needs. Mechanics stay in this design document. No history.
 
@@ -359,7 +358,7 @@ The same files go to both clients:
 - `%USERPROFILE%\.claude\skills\mql5-coding`
 - `%CODEX_HOME%\skills\mql5-coding` (default `%USERPROFILE%\.codex`)
 
-`SKILL.md` has only `name` and `description` frontmatter. Scripts are found next to `SKILL.md`; no client path is hard-coded. `agents/openai.yaml` adds the Codex display name and the `mql5-chm` dependency. In Codex, the scripts need permission to start processes, either full access or the client's approval prompt, to launch MetaEditor and the terminal.
+`SKILL.md` has only `name` and `description` frontmatter. Scripts are found next to `SKILL.md`; no client path is hard-coded. `agents/openai.yaml` adds the Codex display name and the `mql5-docs` dependency. In Codex, the scripts need permission to start processes, either full access or the client's approval prompt, to launch MetaEditor and the terminal.
 
 `install.ps1 [-Client Claude|Codex|Both]`, default `Both`, runs from a reviewed checkout:
 
@@ -376,7 +375,7 @@ If a step fails, run it again; the backup allows a manual restore. There are no 
 ## 9. Migration
 
 - **New repository.** v2 lives in this repository, `MQL5-Coding`. The installed skill keeps its name, `mql5-coding`, so both clients find it as before.
-- **The old repository stays as it is.** `MQL5-Coding-Skill` remains at v1.2.10 as the fallback. The MQL5 CHM MCP repository has a compatibility workflow that reads it, and that keeps working because nothing there changes. Pointing that workflow at this repository, or retiring it, is a separate change that needs the user's OK.
+- **The old repository stays as it is.** `MQL5-Coding-Skill` remains at v1.2.10. Its docs server, the MQL5 CHM MCP (`mql5-chm`), was retired on 2026-10-22 and replaced by the MQL5 Docs MCP (`mql5-docs`), which this skill uses; v1 still names the old tools.
 - **Installing.** Install v2 into both clients with this repository's `install.ps1`. It replaces the v1 files in both installed copies, including every obsolete script.
 - **Standing instructions.** The user's Claude `CLAUDE.md` and Codex `AGENTS.md` hold an MT5 standing-confirmation block that names `Invoke-Mt5TesterSmoke.ps1 -Execute` and `-AcknowledgeSavedAccountRisk`. v1 needs that block until v2 is installed. At install time, and with the user's OK, replace it in both files with one line: "This PC is a test environment: compile, backtest and use any MT5 terminal or account without asking. Never place trades outside the Strategy Tester (demo accounts included), move money or enter credentials."
 - **Removed parameters.** They fail with a clear message naming what replaces them:
@@ -540,7 +539,7 @@ These add about 65 tokens per task and make runs slightly faster overall: fewer 
 - **Tester output.** The tester prints one structured summary line, which is enough for a clean run. `result.json` holds headline values, bounded error lines, the context for each failed check and journal byte ranges, and it is opened only when needed.
 - **No whole files.** SKILL.md forbids reading a report or journal whole.
 - **No repeated work.** The model calls the tester directly instead of compiling first, and reuses files, passages and results until their inputs change.
-- **Lean lookups.** The docs-MCP calls use explicit lean arguments.
+- **Lean lookups.** One `mql5_find` call answers every name a task needs; the docs server keeps each reply within its own budget.
 
 A second GPT pass on 2026-10-20 suggested these refinements, and none of them gives up evidence or checklist duties. Section 12 gives the numbers. The extra code is about 50 lines.
 
@@ -567,7 +566,7 @@ These figures are the skill's fixed overhead for one task. They leave out docs-M
 - **A pass with compile warnings** adds the warning lines read from `result.json`, typically 100-500 tokens.
 - **A failed run** adds opening `result.json`: about 1,600 tokens in a measured example, more when the diagnostics and failure context are long.
 - **A compile on its own** prints about 110 tokens when clean.
-- **Lookups:** the lean arguments save roughly 300-1,500 tokens on a lookup-heavy task.
+- **Lookups:** on MQL5-Docs-MCP's benchmark, `mql5-docs` needed about 45% fewer calls and characters than the retired `mql5-chm` server.
 
 The v2 figures depend on these rules:
 
@@ -580,7 +579,7 @@ The v2 figures depend on these rules:
 
   So the model never needs the 500 KB report (~130,000 tokens) or the megabyte-sized journals.
 - **No whole files.** SKILL.md forbids reading a report or journal whole. The tester guide allows only regex captures from a report, and only chunks of at most 8 KB from this run's journal range.
-- **Frugal docs lookups.** Status before the first fact; batched lookups with `limit: 1`; focused reads of 1500–3000 characters with no related topics or images; reuse of verified passages.
+- **Frugal docs lookups.** One batched `mql5_find` call with every name needed; the rest of a brief or cut answer only when a claim needs it; reuse of text already read.
 - **No repeated work.** The tester compiles; there is no separate compile first. Results are reused until their inputs change.
 
 Savings are never taken by dropping evidence or checklist duties: the checklist stays in SKILL.md, lookups still need a verified passage, and truncated diagnostics stay on disk. The report trap is unlikely but cannot be ruled out, because a model can still choose to open a file. During the real check, measure the clean, warning and failure paths separately with the clients' real token counts, and correct this table.
