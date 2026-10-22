@@ -82,3 +82,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Mark G2 fixed and reference G7 and the existing real-check record.
 - Log: 20261021130614-d183b5
 - Why skipped: pair: confirmed by A
+
+## G10 · open · 2026-10-22 · LOW
+- Task: -
+- Where: tests/fakes/FakeTerminal.cs:72
+- Problem: CodeRabbit (PR 6): File.Move of the PID file would throw if FAKE_PIDS already existed.
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Cannot happen in the suite: every run builds a fresh temporary fixture and the two hang-mode tests use different PID file names; a replace branch would be code for a case that does not occur.

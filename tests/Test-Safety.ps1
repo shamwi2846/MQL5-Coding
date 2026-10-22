@@ -172,7 +172,7 @@ try {
         $compileExit = $LASTEXITCODE
         $smokeOutput = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$scripts\Invoke-Mt5TesterSmoke.ps1" -SourcePath $source `
             -Symbol EURUSD -Period H1 -FromDate 2026.01.01 -ToDate 2026.02.01 -SetPath $setFile -Leverage 100 -OutputDirectory "$root\entry" `
-            -TerminalPath $terminal -ExpectedLogMarker $marker -TimeoutSeconds 30 -Model 0 -ExecutionMode 0 -Deposit 10000 -Currency USD
+            -TerminalPath $terminal -ExpectedLogMarker $marker -TimeoutSeconds 30 -Model 0 -ExecutionMode 1 -Deposit 10000 -Currency USD
         $smokeExit = $LASTEXITCODE
         Reset-Fakes 'child'
         $injected = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$scripts\Invoke-Mt5TesterSmoke.ps1" -SourcePath $source `
@@ -193,8 +193,9 @@ try {
     $iniCopy = [Text.Encoding]::Unicode.GetString($iniBytes)
     Check 'end to end: the ini is UTF-16LE with BOM and CRLF, has the safety keys and Leverage=1:100' (($iniBytes[0] -eq 0xFF) -and ($iniBytes[1] -eq 0xFE) -and
         ($iniCopy -notmatch '[^\r]\n') -and ($iniCopy -match '(?m)^AllowLiveTrading=0\r$') -and ($iniCopy -match '(?m)^Leverage=1:100\r$'))
+    # Non-default values, so a dropped parameter would show.
     Check 'end to end: the other settings pass through the public script unchanged' (($iniCopy -match '(?m)^Model=0\r$') -and
-        ($iniCopy -match '(?m)^ExecutionMode=0\r$') -and ($iniCopy -match '(?m)^Deposit=10000\r$') -and ($iniCopy -match '(?m)^Currency=USD\r$'))
+        ($iniCopy -match '(?m)^ExecutionMode=1\r$') -and ($iniCopy -match '(?m)^Deposit=10000\r$') -and ($iniCopy -match '(?m)^Currency=USD\r$'))
     Check 'public script: a symbol with injected lines gives exit 2, nothing starts or is created' (($injectedExit -eq 2) -and
         (@($injected) -like 'MQL5_RESULT *') -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath "$root\injected"))
     $after = [IO.File]::ReadAllBytes($journal)
