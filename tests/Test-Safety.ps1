@@ -172,8 +172,12 @@ try {
         $compileExit = $LASTEXITCODE
         $smokeOutput = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$scripts\Invoke-Mt5TesterSmoke.ps1" -SourcePath $source `
             -Symbol EURUSD -Period H1 -FromDate 2026.01.01 -ToDate 2026.02.01 -SetPath $setFile -Leverage 100 -OutputDirectory "$root\entry" `
-            -TerminalPath $terminal -ExpectedLogMarker $marker -TimeoutSeconds 30
+            -TerminalPath $terminal -ExpectedLogMarker $marker -TimeoutSeconds 30 -Model 0 -ExecutionMode 0 -Deposit 10000 -Currency USD
         $smokeExit = $LASTEXITCODE
+        Reset-Fakes 'child'
+        $injected = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$scripts\Invoke-Mt5TesterSmoke.ps1" -SourcePath $source `
+            -Symbol "EURUSD`r`n[Experts]`r`nAllowLiveTrading=1" -Period H1 -UseExpertDefaults -OutputDirectory "$root\injected" -TerminalPath $terminal
+        $injectedExit = $LASTEXITCODE
     }
     finally { $env:APPDATA = $realAppData; Remove-Item Env:\FAKE_MARKER, Env:\FAKE_SEEN_HASH, Env:\FAKE_SEEN_SET }
     $compiled = (@($compileOutput) -like 'MQL5_RESULT *')[0].Substring(12) | ConvertFrom-Json
@@ -189,6 +193,10 @@ try {
     $iniCopy = [Text.Encoding]::Unicode.GetString($iniBytes)
     Check 'end to end: the ini is UTF-16LE with BOM and CRLF, has the safety keys and Leverage=1:100' (($iniBytes[0] -eq 0xFF) -and ($iniBytes[1] -eq 0xFE) -and
         ($iniCopy -notmatch '[^\r]\n') -and ($iniCopy -match '(?m)^AllowLiveTrading=0\r$') -and ($iniCopy -match '(?m)^Leverage=1:100\r$'))
+    Check 'end to end: the other settings pass through the public script unchanged' (($iniCopy -match '(?m)^Model=0\r$') -and
+        ($iniCopy -match '(?m)^ExecutionMode=0\r$') -and ($iniCopy -match '(?m)^Deposit=10000\r$') -and ($iniCopy -match '(?m)^Currency=USD\r$'))
+    Check 'public script: a symbol with injected lines gives exit 2, nothing starts or is created' (($injectedExit -eq 2) -and
+        (@($injected) -like 'MQL5_RESULT *') -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath "$root\injected"))
     $after = [IO.File]::ReadAllBytes($journal)
     Check 'end to end: an older OnInit failure is ignored and the existing journal bytes are intact' (($after.Length -gt $journalBytes.Length) -and
         ([Convert]::ToBase64String($after, 0, $journalBytes.Length) -eq [Convert]::ToBase64String($journalBytes)))
@@ -295,6 +303,26 @@ try {
         Check "install ${name}: sibling skill and instruction file unchanged" (Test-Same @($before[$name] | Where-Object { $_ -notlike 'skills\mql5-coding\*' }) $others)
     }
     Check 'install: the checkout is unchanged' (Test-Same $checkout (Get-Inventory $skill))
+
+    # Last, because it leaves that run's staging behind: when the runner itself is killed, the
+    # kill-on-close job must stop MT5 and its children, and the run lock must be released.
+    Reset-Fakes 'ok' 'hang'
+    $env:FAKE_PIDS = "$root\killed-pids.txt"
+    $env:APPDATA = $appData
+    try {
+        $runner = Start-Process -FilePath $shell -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+            '-File', "`"$scripts\Invoke-Mt5TesterSmoke.ps1`"", '-SourcePath', "`"$source`"", '-Symbol', 'EURUSD', '-Period', 'H1', '-UseExpertDefaults',
+            '-OutputDirectory', "`"$root\killed`"", '-TerminalPath', "`"$terminal`"", '-TimeoutSeconds', '120')
+    }
+    finally { $env:APPDATA = $realAppData }
+    $deadline = (Get-Date).AddSeconds(30)
+    while (-not (Test-Path -LiteralPath "$root\killed-pids.txt") -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }
+    $killedIds = @((Get-Content -LiteralPath "$root\killed-pids.txt" -ErrorAction SilentlyContinue) -split ' ' | Where-Object { $_ } | ForEach-Object { [int]$_ })
+    Stop-Process -Id $runner.Id -Force
+    $deadline = (Get-Date).AddSeconds(15)
+    while ($killedIds.Count -and @(Get-Process -Id $killedIds -ErrorAction SilentlyContinue).Count -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }
+    Check 'killing the runner stops the terminal and its child, and frees the run lock' (($killedIds.Count -eq 2) -and
+        (@(Get-Process -Id $killedIds -ErrorAction SilentlyContinue).Count -eq 0) -and $(try { (Open-RunLock $data).Dispose(); $true } catch { $false }))
 }
 finally {
     Get-Process -Name terminal64, metaeditor64 -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($install) } | Stop-Process -Force

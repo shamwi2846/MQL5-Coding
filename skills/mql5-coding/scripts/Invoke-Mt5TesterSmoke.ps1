@@ -40,9 +40,7 @@ if ($UnknownArguments) {
     $result = [ordered]@{ status = 'failed'; exit_code = 2; message = (@($notes) + 'See references/strategy-tester.md.') -join ' ' }
 }
 else {
-    $options = @{}
-    foreach ($key in $PSBoundParameters.Keys) { $options[$key] = $PSBoundParameters[$key] }
-    $result = Invoke-Mt5Smoke @options
+    $result = Invoke-Mt5Smoke @PSBoundParameters
 }
 
 $summary = [ordered]@{ status = $result.status; exit_code = $result.exit_code }
