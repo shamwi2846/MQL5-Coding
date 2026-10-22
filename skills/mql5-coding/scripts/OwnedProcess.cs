@@ -82,7 +82,6 @@ public sealed class OwnedProcess : IDisposable
     static extern bool CloseHandle(IntPtr handle);
 
     IntPtr job, process;
-    public int ProcessId { get; private set; }
 
     public static OwnedProcess Start(string application, string arguments, string directory)
     {
@@ -110,7 +109,6 @@ public sealed class OwnedProcess : IDisposable
             throw error;
         }
         owned.process = info.Process;
-        owned.ProcessId = info.ProcessId;
         try
         {
             if (!AssignProcessToJobObject(owned.job, info.Process))

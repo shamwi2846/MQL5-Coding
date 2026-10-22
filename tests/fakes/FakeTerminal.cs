@@ -1,7 +1,7 @@
 // Stands in for terminal64.exe in tests/Test-Safety.ps1. It reads the /config ini and writes what
 // the real tester writes: journal lines, a report with companions, the auto-saved preset and a cache
-// file. FAKE_TERMINAL_MODE: pass, oninit, foreign (no English phrases), hang (spawns a child that
-// holds the report open, then never exits), idle (an already running terminal), hold (that child).
+// file. FAKE_TERMINAL_MODE: pass, hang (spawns a child that holds the report open, then never
+// exits), idle (an already running terminal), hold (that child).
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -67,27 +67,19 @@ static class FakeTerminal
             var start = new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName, "\"" + report + ".htm\"") { UseShellExecute = false };
             start.EnvironmentVariables["FAKE_TERMINAL_MODE"] = "hold";
             Process child = Process.Start(start);
-            File.WriteAllText(Env("FAKE_PIDS"), Process.GetCurrentProcess().Id + " " + child.Id);
+            // Written aside, then renamed, so the file only ever appears complete.
+            File.WriteAllText(Env("FAKE_PIDS") + ".tmp", Process.GetCurrentProcess().Id + " " + child.Id);
+            File.Move(Env("FAKE_PIDS") + ".tmp", Env("FAKE_PIDS"));
             Thread.Sleep(Timeout.Infinite);
         }
 
         string terminalLogs = Path.Combine(data, "logs"), testerLogs = Path.Combine(data, @"Tester\logs");
         string chart = tester["Symbol"] + "," + tester["Period"] + ": ";
-        if (mode == "foreign")
-        {
-            Journal(terminalLogs, "Startup", "configuration chargee depuis \"" + ini + "\"");
-            return 0;
-        }
         Journal(terminalLogs, "Startup", "successfully initialized from start config \"" + ini + "\"");
         Journal(terminalLogs, "Tester", "automatic testing started");
         Journal(testerLogs, "Core 01", chart + "testing of Experts\\" + tester["Expert"] + " from " + tester["FromDate"] + " 00:00 to " +
             tester["ToDate"] + " 00:00 started with inputs:");
         Journal(testerLogs, "Core 01", "  InpMarker=" + (Env("FAKE_MARKER") ?? ""));
-        if (mode == "oninit")
-        {
-            Journal(testerLogs, "Core 01", "tester stopped because OnInit returns non-zero");
-            return 0;
-        }
         if (Env("FAKE_MARKER") != null) Journal(testerLogs, "Core 01", tester["FromDate"] + " 00:00:00   " + Env("FAKE_MARKER"));
         Journal(testerLogs, "Core 01", chart + "100 ticks, 10 bars generated. Test passed in 0:00:00.010.");
         Journal(terminalLogs, "Tester", "last test passed with result \"successfully finished\" in 0:00:00.010");
