@@ -91,3 +91,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: Cannot happen in the suite: every run builds a fresh temporary fixture and the two hang-mode tests use different PID file names; a replace branch would be code for a case that does not occur.
+
+## G11 · fixed · 2026-10-22 · LOW
+- Task: Point the mql5-coding skill at the MQL5 Docs MCP
+- Where: docs/design.md:582
+- Problem: F1: Remove the remaining retired lookup procedure
+- Trigger: A maintainer follows the token-budget section's current documentation lookup rules.
+- Fix: Replace the obsolete procedure and lean-argument claims with a reference to the server's tool descriptions and instructions.
+- Log: 20261022102929-904171
+- Why skipped: labelled GAP by the reviewer; harm: The design still directs readers to an obsolete procedure that the new server does not support.

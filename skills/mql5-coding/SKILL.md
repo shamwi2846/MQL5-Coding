@@ -1,13 +1,13 @@
 ---
 name: mql5-coding
-description: Write, review, explain, debug, compile and backtest MetaTrader 5 MQL5 code (EAs, indicators, scripts, services, libraries; .mq5/.mqh/.ex5) on Windows, checking MQL5 facts in the mql5-chm docs first. Not MQL4/MT4.
+description: Write, review, explain, debug, compile and backtest MetaTrader 5 MQL5 code (EAs, indicators, scripts, services, libraries; .mq5/.mqh/.ex5) on Windows, checking MQL5 facts in the mql5-docs MCP first. Not MQL4/MT4.
 ---
 
 # MQL5 Coding
 
 ## Scope
 
-MT5/MQL5 only: Expert Advisors, indicators, scripts, services and libraries (`.mq5`, `.mqh`, `.ex5`); not MQL4/MT4 (`.mq4`, `.ex4`). The scripts are in the `scripts` folder next to this file. Use the MCP tool names your client lists (Claude Code: `mcp__mql5-chm__...`).
+MT5/MQL5 only: Expert Advisors, indicators, scripts, services and libraries (`.mq5`, `.mqh`, `.ex5`); not MQL4/MT4 (`.mq4`, `.ex4`). The scripts are in the `scripts` folder next to this file. Use the MCP tool names your client lists (Claude Code: `mcp__mql5-docs__mql5_find`; Codex: `mcp__mql5_docs__mql5_find`).
 
 ## Intent
 
@@ -21,13 +21,12 @@ MT5/MQL5 only: Expert Advisors, indicators, scripts, services and libraries (`.m
 
 Before asserting or using an MQL5 API, language, event, error, trade-retcode, symbol-property or Strategy Tester fact:
 
-1. **Status.** Call `mql5_chm_status` once, before the first MQL5 fact in a task.
-2. **Lookups.** For several names, make one `mql5_chm_lookup_identifiers` call with `source: "mql5"` and `limit: 1`. For one name, use `mql5_chm_search` with `source: "mql5"`, `limit: 1` and `expand: false`. Only an exact match whose passage contains the identifier as a whole token counts; approximate, prefix or `non_exact` results never do.
-3. **Reads.** `mql5_chm_read` with `section_id` or `focus`, `max_chars` 1500-3000, `include_related: false`, `include_images: false`. Follow `next_cursor` (same `topic_id` and `section_id`, no `focus`) until the passage settles the claim; a short first excerpt is never a reason to stop.
-4. **Reuse.** Keep a verified passage for the rest of the task; never read it twice.
-5. **Citations.** Give the title, topic id and section id, plus the corpus or index revision once per answer.
-6. **Fallback.** When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 CHM`, then use and cite official MetaQuotes pages (mql5.com, metatrader5.com). Never fill gaps from memory. The CHM covers the MQL5 reference and books, not terminal settings or startup `.ini` keys. If no `mql5_chm_*` tools are listed, say so and use the official pages the same way; a missing MCP never stalls review work.
-7. **Logs** describe the local program and run, not the API.
+1. **Find.** Call `mql5_find` once with every name you need: up to 16 API names, exact page titles or short questions. When an answer is brief or cut, make the call it names before relying on what it leaves out.
+2. **Evidence.** Base each claim on returned text that states it. `=` proves only that the name matched; `~` is a search result and never identifies an API.
+3. **Reuse.** Keep text already read for the rest of the task while the index tag is unchanged; never read it twice.
+4. **Citations.** Give the page title and id, plus the docs version (download date and index tag) once per answer.
+5. **Fallback.** When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 docs`, then use and cite official MetaQuotes pages (mql5.com, metatrader5.com); check them too when freshness matters. Never fill gaps from memory. The docs cover the MQL5 reference and books, not terminal settings or startup `.ini` keys. If no `mql5_find` tool is listed, say so and use the official pages the same way; a missing MCP never stalls review work.
+6. **Logs** describe the local program and run, not the API.
 
 ## Evidence and classification
 
@@ -72,4 +71,4 @@ State symptom, cause, impact and evidence separately.
 
 ## Report
 
-Lead with the outcome, then: files and behavior changed; the evidenced cause; CHM citations; the compile result with errors, warnings and artifact; tester settings, result and output folder; checks not run; remaining uncertainty. A smoke pass never implies profitability or live safety.
+Lead with the outcome, then: files and behavior changed; the evidenced cause; docs citations; the compile result with errors, warnings and artifact; tester settings, result and output folder; checks not run; remaining uncertainty. A smoke pass never implies profitability or live safety.
