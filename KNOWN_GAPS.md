@@ -163,3 +163,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Add a Notes entry explaining that v2.1.2 already exists and this fix will ship as v2.1.3.
 - Log: 20261023181359-1a8d52
 - Why skipped: labelled GAP by the reviewer; harm: The release metadata and authoritative release requirement disagree without an explanation in Notes.
+
+## G19 · open · 2026-10-23 · LOW
+- Task: -
+- Where: skills/mql5-coding/references/strategy-tester.md:47
+- Problem: CodeRabbit (PR 10): treat a /config terminal as another test run only when its ini matches this skill's staging; otherwise close it.
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Declined: since 2.1.1 this skill's own runs show as the held run lock, never as 'already running', so a /config terminal behind 'already running' is always another runner (for example a project's own test runner). Closing it would interrupt that run; waiting is the safe default.
