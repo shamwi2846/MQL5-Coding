@@ -24,7 +24,7 @@ Before asserting or using an MQL5 API, language, event, error, trade-retcode, sy
 1. **Find.** Call `mql5_find` once with every name you need: up to 16 API names, exact page titles or short questions. When an answer is brief or cut, make the call it names before relying on what it leaves out.
 2. **Evidence.** Base each claim on returned text that states it. `=` proves only that the name matched; `~` is a search result and never identifies an API.
 3. **Reuse.** Keep text already read for the rest of the task while the index tag is unchanged; never read it twice.
-4. **Citations.** Give the page title and id, plus the docs version (download date and index tag) once per answer.
+4. **Citations.** Name the docs page title, plus the docs version (download date and index tag) once per answer; give page ids only when asked.
 5. **Fallback.** When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 docs`, then use and cite official MetaQuotes pages (mql5.com, metatrader5.com); check them too when freshness matters. Never fill gaps from memory. The docs cover the MQL5 reference and books, not terminal settings or startup `.ini` keys. If no `mql5_find` tool is listed, say so and use the official pages the same way; a missing MCP never stalls review work.
 6. **Logs** describe the local program and run, not the API.
 
@@ -67,7 +67,7 @@ State symptom, cause, impact and evidence separately.
 - Never run an `.ex5` the user did not build or vouch for. Building it here does not make it trustworthy: the EA runs with the tester agent's file and network access.
 - Pass markers go only in a separate test EA. Never edit the user's EA just to test it, unless the user asks or it already has a self-test. A user's EA gets the plain engine smoke test.
 - Start with the `MQL5_RESULT` line; open `result.json` only when it is not enough. Never read a report (about 130,000 tokens) or a journal whole; use the tester guide's bounded reads.
-- A running selected terminal gives exit 4: when the user's instructions allow, close it gracefully as the tester guide says and rerun; otherwise ask.
+- Exit 4 because another tester run holds the lock: that run, perhaps from another chat, is still going; wait and retry, never close its terminal. Exit 4 because the selected terminal is already running: when the user's instructions allow, close it gracefully as the tester guide says and rerun; otherwise ask.
 
 ## Report
 

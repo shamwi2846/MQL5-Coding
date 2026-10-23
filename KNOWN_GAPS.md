@@ -100,3 +100,39 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Replace the obsolete procedure and lean-argument claims with a reference to the server's tool descriptions and instructions.
 - Log: 20261022102929-904171
 - Why skipped: labelled GAP by the reviewer; harm: The design still directs readers to an obsolete procedure that the new server does not support.
+
+## G12 · fixed · 2026-10-23 · LOW
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: docs/design.md:96
+- Problem: F1: Align the design’s citation rule with the revised skill
+- Trigger: A maintainer rebuilds or checks SKILL.md against design section 4, as R1 directs.
+- Fix: Update the design’s citation bullet to require page titles and give page IDs only when asked.
+- Log: 20261023000324-63557c
+- Why skipped: pair: both
+
+## G13 · fixed · 2026-10-23 · MEDIUM
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: -
+- Problem: F2: R12 is PARTIAL
+- Trigger: the task as asked
+- Fix: -
+- Log: 20261023000324-63557c
+- Why skipped: pair: disputed by A: skills/mql5-coding/scripts/Mql5Tester.ps1:400 implements the lock ordering; skills/mql5-coding/scripts/Mql5Compile.ps1:119 implements .NET hashing; skills/mql5-coding/version.json:1 specifies 2.1.1. Pending merge, reinstall and tagging are release-status limitations, not a reachable failure causing the concrete harm required for a BUG.
+
+## G14 · fixed · 2026-10-23 · MEDIUM
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: -
+- Problem: F1: R12 is PARTIAL
+- Trigger: the task as asked
+- Fix: -
+- Log: 20261023001301-8cd3ed
+- Why skipped: all R12 code, docs and tests are implemented and acknowledged; what remains are the post-review release steps (commit, PR, merge when green, reinstall into both clients, tag v2.1.1), which cannot precede the review and are done next.
+
+## G15 · open · 2026-10-23 · LOW
+- Task: -
+- Where: skills/mql5-coding/scripts/Mql5Compile.ps1:121
+- Problem: CodeRabbit (PR 8): if File.Open throws, the SHA256 provider in Get-FileSha256 is not disposed explicitly.
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: No harm: each compile or tester call is a short-lived process, so the provider is released when it ends; a locked file already fails the hash as tested. Not worth another change to reviewed code.

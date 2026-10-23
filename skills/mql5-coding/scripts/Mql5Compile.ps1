@@ -114,8 +114,13 @@ function Get-CappedLines([string[]]$Lines, [int]$Max) {
     }
 }
 
+# .NET rather than Get-FileHash: Windows PowerShell started from PowerShell 7 with Start-Process
+# inherits a module path under which Get-FileHash does not load (measured), failing every compile.
 function Get-FileSha256([string]$Path) {
-    (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try { -join ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) }
+    finally { $stream.Dispose(); $sha.Dispose() }
 }
 
 function Set-Outcome($Result, [int]$ExitCode, [string]$Status, $Message) {

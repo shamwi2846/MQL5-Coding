@@ -27,7 +27,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<skill 
 | 1 | `failed_checks` | It ran, but a pass rule failed; see `failed_checks` |
 | 2 | `failed`, `journal_phrases_not_found`, `cleanup_failed` | Input, compile, tool, evidence or cleanup failure |
 | 3 | `timeout` | The terminal and its agents were stopped |
-| 4 | `blocked` | No usable terminal (missing, several found, or running), no single data folder, or another run holds the lock; nothing was created |
+| 4 | `blocked` | No usable terminal (missing, several found, or running), no single data folder, or another run holds the lock (wait for it; never close its terminal); nothing was created |
 
 A pass never proves strategy correctness, profitability or full-date coverage.
 
@@ -44,5 +44,5 @@ A pass never proves strategy correctness, profitability or full-date coverage.
 - MT5 must run in English: the pass rules match English journal phrases. Otherwise the run ends with `journal_phrases_not_found`.
 - Do not open the selected terminal by hand during a run.
 - Start a long test as a background command, or give the call a timeout longer than `-TimeoutSeconds`. If the client kills the runner, MT5 stops with it, but that run's staging stays behind.
-- **Closing a running terminal (exit 4), when the user's instructions allow it:** close it gracefully with `CloseMainWindow()` and wait up to 30 s (usually 1-3 s). Only if it is still running, use `Stop-Process`; a hard kill can damage history files. Then wait up to 30 s until no `terminal64.exe` at that path and no `metatester64.exe` from that install folder remain. If any remain, report the run as blocked and do not rerun.
+- **Closing a running terminal (exit 4, "already running" only; a held lock means another run is in progress), when the user's instructions allow it:** close it gracefully with `CloseMainWindow()` and wait up to 30 s (usually 1-3 s). Only if it is still running, use `Stop-Process`; a hard kill can damage history files. Then wait up to 30 s until no `terminal64.exe` at that path and no `metatester64.exe` from that install folder remain. If any remain, report the run as blocked and do not rerun.
 - For users who keep a terminal open: a second MT5 install just for testing, selected with `-TerminalPath` and started once with a demo login.

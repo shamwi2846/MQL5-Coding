@@ -83,14 +83,18 @@ try {
     Check '-MetaEditorPath pointing at a terminal: exit 2, nothing starts' (($c.exit_code -eq 2) -and ((Get-Count $terminalCount) -eq 0))
 
     # Group 3: stale artifact and compile results
+    # Failed compiles keep their folder for inspection; the tests remove exactly the folders they made.
     Reset-Fakes 'nolog'
-    Check 'editor that writes no log: exit 2' ((Invoke-Mql5Compile -SourcePath $source -MetaEditorPath $editor).exit_code -eq 2)
+    $c = Invoke-Mql5Compile -SourcePath $source -MetaEditorPath $editor
+    Check 'editor that writes no log: exit 2, folder kept' (($c.exit_code -eq 2) -and (Test-Path -LiteralPath $c.temp_folder))
+    Remove-Item -LiteralPath $c.temp_folder -Recurse -Force
     [IO.File]::WriteAllText($ex5, 'old build')
     (Get-Item -LiteralPath $ex5).LastWriteTimeUtc = Get-Date -Year 2020 -Month 1 -Day 1
     $oldHash = Get-FileSha256 $ex5
     Reset-Fakes 'stale'
     $c = Invoke-Mql5Compile -SourcePath $source -MetaEditorPath $editor
-    Check 'clean log but untouched .ex5: exit 2, no artifact' (($c.exit_code -eq 2) -and -not $c.sha256)
+    Check 'clean log but untouched .ex5: exit 2, no artifact, folder kept' (($c.exit_code -eq 2) -and -not $c.sha256 -and (Test-Path -LiteralPath $c.temp_folder))
+    Remove-Item -LiteralPath $c.temp_folder -Recurse -Force
     $r = Invoke-Smoke
     Check 'tester with an untouched .ex5: exit 2, terminal never starts, old build unchanged' (($r.exit_code -eq 2) -and ((Get-Count $terminalCount) -eq 0) -and
         ((Get-FileSha256 $ex5) -eq $oldHash) -and ((Get-SmokeFiles).Count -eq 0))
@@ -101,6 +105,14 @@ try {
     Check 'editor whose child writes the results later is waited for' (($c.exit_code -eq 0) -and ((Get-FileSha256 $ex5) -eq $c.sha256))
     $threw = try { Copy-StagedExpert $ex5 "$root\copy.ex5" ('0' * 64); $false } catch { (Get-FailureExitCode $_) -eq 2 }
     Check 'staged copy with another hash: exit 2' $threw
+    $vector = Join-Path $project 'EA [1].ex5'
+    [IO.File]::WriteAllBytes($vector, [byte[]](0..255))
+    Check 'build hash: exact bytes, a path with spaces and brackets, file released afterwards' (
+        ((Get-FileSha256 $vector) -eq '40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880') -and
+        $(try { [IO.File]::Open($vector, 'Open', 'ReadWrite', 'None').Dispose(); $true } catch { $false }))
+    $holder = [IO.File]::Open($vector, 'Open', 'Read', 'None')
+    try { $threw = try { [void](Get-FileSha256 $vector); $false } catch { $true } } finally { $holder.Dispose() }
+    Check 'build hash of a locked file fails instead of returning a value' $threw
     Reset-Fakes 'errors'
     $c = Invoke-Mql5Compile -SourcePath $source -MetaEditorPath $editor
     Check 'compile errors: exit 1, both diagnostics shown, log deleted' (($c.exit_code -eq 1) -and (@($c.diagnostics).Count -eq 2) -and -not $c.log -and -not $c.temp_folder)
@@ -120,9 +132,20 @@ try {
     try {
         Reset-Fakes
         $r = Invoke-Smoke
-        Check 'running terminal: exit 4, nothing compiled or created' (($r.exit_code -eq 4) -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath (Get-LastOutput)))
+        $blockedOutput = Get-LastOutput
+        Check 'running terminal: exit 4 "already running", nothing compiled or created' (($r.exit_code -eq 4) -and ($r.message -match 'already running') -and
+            ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath $blockedOutput))
+        # Another run holds the lock while its terminal runs: report the lock, never "close it".
+        $lock = Open-RunLock $data
+        try { $r = Invoke-Smoke } finally { $lock.Dispose() }
+        Check 'lock held while a terminal runs: exit 4 names the other run, not the terminal' (($r.exit_code -eq 4) -and ($r.message -match 'Another tester run') -and
+            ($r.message -notmatch 'already running') -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath (Get-LastOutput)) -and -not $idle.HasExited)
     }
     finally { Stop-Process -Id $idle.Id -Force; $idle.WaitForExit() }
+    Reset-Fakes
+    Check 'after a running-terminal block the lock is free and a retry to the same folder passes' (
+        $(try { (Open-RunLock $data).Dispose(); $true } catch { $false }) -and ((Invoke-Smoke @{ OutputDirectory = $blockedOutput }).exit_code -eq 0))
+    Reset-Fakes
     $lock = Open-RunLock $data
     try {
         $r = Invoke-Smoke
@@ -214,6 +237,36 @@ try {
         ($r.status -eq 'cleanup_failed') -and ($savedResult.primary_status -eq 'engine_smoke_passed') -and
         (@($savedResult.cleanup.left) -contains "$data\$($r.staged_name).png") -and ((Get-Content -LiteralPath "$($r.output_folder)\$($r.staged_name).png" -Raw) -eq 'occupied'))
     Remove-Item -LiteralPath "$data\$($r.staged_name).png"
+
+    # Windows PowerShell started from PowerShell 7 with Start-Process inherits PowerShell 7's module
+    # path, under which Get-FileHash does not load; compile and tester must still work there.
+    $ps7Modules = Join-Path $env:ProgramFiles 'PowerShell\7\Modules'
+    $winPs = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    function Start-WinPs([string[]]$Arguments, [string]$OutFile) {
+        (Start-Process -FilePath $winPs -ArgumentList $Arguments -NoNewWindow -Wait -PassThru -RedirectStandardOutput $OutFile).ExitCode
+    }
+    if (Test-Path -LiteralPath $ps7Modules) {
+        Reset-Fakes
+        $savedModulePath = $env:PSModulePath
+        $savedAppData = $env:APPDATA
+        $env:PSModulePath = "$ps7Modules;$savedModulePath"
+        $env:APPDATA = $appData
+        try {
+            [void](Start-WinPs @('-NoProfile', '-Command', "if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) { 'loads' } else { 'missing' }") "$root\probe.txt")
+            $inheritedCompile = Start-WinPs @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$scripts\Compile-Mql5.ps1`"",
+                '-SourcePath', "`"$source`"", '-MetaEditorPath', "`"$editor`"") "$root\inherited-compile.txt"
+            $inheritedSmoke = Start-WinPs @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$scripts\Invoke-Mt5TesterSmoke.ps1`"",
+                '-SourcePath', "`"$source`"", '-Symbol', 'EURUSD', '-Period', 'H1', '-UseExpertDefaults', '-OutputDirectory', "`"$root\inherited`"",
+                '-TerminalPath', "`"$terminal`"") "$root\inherited-smoke.txt"
+        }
+        finally { $env:PSModulePath = $savedModulePath; $env:APPDATA = $savedAppData }
+        if ((Get-Content -LiteralPath "$root\probe.txt" -Raw).Trim() -eq 'missing') {
+            Check 'Windows PowerShell with PowerShell 7''s module path: compile and smoke test still pass' (($inheritedCompile -eq 0) -and ($inheritedSmoke -eq 0) -and
+                ((Get-Content -LiteralPath "$root\inherited-compile.txt" -Raw) -match '"status":"compiled"') -and
+                ((Get-Content -LiteralPath "$root\inherited-smoke.txt" -Raw) -match '"status":"engine_smoke_passed"'))
+        }
+        else { Write-Host 'skip Windows PowerShell with PowerShell 7''s module path: Get-FileHash still loads here' }
+    }
 
     [void][IO.Directory]::CreateDirectory("$root\claimed")
     New-OutputFolder "$root\claimed"
