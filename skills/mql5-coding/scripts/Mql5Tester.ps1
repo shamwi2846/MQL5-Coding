@@ -123,7 +123,7 @@ function Assert-TerminalNotRunning([string]$TerminalPath) {
 function Open-RunLock([string]$DataFolder) {
     $path = Join-Path $DataFolder '.mql5-coding-smoke.data-lock'
     try { [IO.FileStream]::new($path, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None, 1, [IO.FileOptions]::DeleteOnClose) }
-    catch [IO.IOException] { Stop-Mql5 "Another tester run holds $path." 4 }
+    catch [IO.IOException] { Stop-Mql5 "Another tester run holds $path; wait for it to finish and retry. Do not close its terminal." 4 }
 }
 
 function Copy-StagedExpert([string]$Source, [string]$Destination, [string]$ExpectedSha256) {
@@ -395,9 +395,10 @@ function Invoke-Mt5Smoke {
         $result.terminal_build = [Diagnostics.FileVersionInfo]::GetVersionInfo($terminal).FilePrivatePart
         $data = Get-Mt5DataFolder $terminal $AppData
         $result.data_folder = $data
-        Assert-TerminalNotRunning $terminal
-
+        # Lock first: a terminal started by another run (from any chat) then reports as that run's
+        # held lock, meaning wait, rather than as a running terminal the caller might close.
         $lock = Open-RunLock $data
+        Assert-TerminalNotRunning $terminal
         if (Test-Path -LiteralPath $settings.output) { Stop-Mql5 "The output folder must not exist yet: $($settings.output)" }
         New-OutputFolder $settings.output
         $result.output_folder = $settings.output
