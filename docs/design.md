@@ -248,7 +248,7 @@ Records are classified as follows:
 All of these must hold:
 
 - Terminal log, in order: `successfully initialized from start config "<our ini>"`, then `automatic testing started`, then `last test passed with result "successfully finished"`.
-- Tester log: exactly one system test-start record (`testing of Experts\... started with inputs:`) for any expert in the appended evidence. It must start with `<symbol>,<period>: testing of Experts\Mql5Smoke\<staged>.ex5 from <from> 00:00 to <to> 00:00 started with inputs:`.
+- Tester log: exactly one system test-start record (`testing of Experts\... started`, with or without a trailing ` with inputs:`) for any expert in the appended evidence. It must be exactly `<symbol>,<period>: testing of Experts\Mql5Smoke\<staged>.ex5 from <from> 00:00 to <to> 00:00 started`, optionally followed by ` with inputs:`. MT5 leaves ` with inputs:` out for an EA without inputs (seen in real use 2026-10-23, where the stricter old rule failed a passing test).
 - After that record: a system record that starts with `<symbol>,<period>: ` and contains `Test passed in`.
 - In both of those records, `<period>` uses the journal's spelling. The journal writes `D1` as `Daily`, seen in hundreds of real journal records. It writes `W1` as `Weekly` and `MN1` as `Monthly` (measured 2026-10-21). Minute and hour periods are spelled as given (`M1`, `H1`).
 - No system record containing `tester stopped because OnInit returns non-zero`.
@@ -257,7 +257,7 @@ All of these must hold:
 
 **Unrecognized journal.** The terminal journal can gain records that contain none of the expected English terminal phrases. In that case the status is `journal_phrases_not_found`, exit 2, with a hint that MT5 must run in English or the start config was not loaded. It is never reported as a failed strategy test (exit 1). No pre-launch language check exists: MT5's config `.ini` files hold no readable language setting (checked on build 6258).
 
-The run id sits in both the ini path and the expert path, and the lock plus the running check keep other terminals of this install out. So the appended lines belong to this run. No time-window logic is needed.
+The run id sits in both the ini path and the expert path, and the lock plus the running check keep out other runs that use this skill. A runner that takes no lock can still start the same terminal mid-run; one project's own runner did on 2026-10-22. The pass rules then fail rather than pass: they need exactly one start record, and it must name this run's expert. So the appended lines that count belong to this run. No time-window logic is needed.
 
 **Result status:**
 

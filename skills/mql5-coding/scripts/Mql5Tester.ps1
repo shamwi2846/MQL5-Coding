@@ -230,10 +230,17 @@ function Set-SmokeVerdict($Result, $Terminal, $Tester, $Settings, [string]$IniPa
     $checks.testing_started = $startedAt -ge 0
     $checks.terminal_reported_pass = $finishedAt -ge 0
 
-    $starts = @(for ($i = 0; $i -lt $q.Count; $i++) { if ($q[$i].kind -eq 'system' -and $q[$i].message -match 'testing of Experts\\.* started with inputs:') { $i } })
+    # A test-start record ends in "started with inputs:", or in plain "started" for an EA without
+    # inputs (seen in real use). Every expert's start counts; this run's must match exactly.
+    $starts = @(for ($i = 0; $i -lt $q.Count; $i++) { if ($q[$i].kind -eq 'system' -and $q[$i].message -match 'testing of Experts\\.+ started( with inputs:)?\s*$') { $i } })
     $prefix = "$($Settings.symbol),$($Settings.journal_period): "
-    $expected = "${prefix}testing of Experts\Mql5Smoke\$Staged.ex5 from $($Settings.from) 00:00 to $($Settings.to) 00:00 started with inputs:"
-    $startAt = if ($starts.Count -eq 1 -and $q[$starts[0]].message.StartsWith($expected, [StringComparison]::OrdinalIgnoreCase)) { $starts[0] } else { -1 }
+    $expected = "${prefix}testing of Experts\Mql5Smoke\$Staged.ex5 from $($Settings.from) 00:00 to $($Settings.to) 00:00 started"
+    $startAt = -1
+    if ($starts.Count -eq 1) {
+        $message = $q[$starts[0]].message.TrimEnd()
+        if ([string]::Equals($message, $expected, [StringComparison]::OrdinalIgnoreCase) -or
+            [string]::Equals($message, "$expected with inputs:", [StringComparison]::OrdinalIgnoreCase)) { $startAt = $starts[0] }
+    }
     $passAt = if ($startAt -ge 0) { Find-SystemRecord $q ($startAt + 1) 'Test passed in' $prefix } else { -1 }
     $checks.single_test_start = $starts.Count -eq 1
     $checks.expected_test_start = $startAt -ge 0

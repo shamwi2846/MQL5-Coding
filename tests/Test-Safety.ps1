@@ -294,9 +294,9 @@ try {
     $verdictSettings = Resolve-TesterSettings @{ SourcePath = $source; Symbol = 'EURUSD'; Period = 'H1'; UseExpertDefaults = $true; OutputDirectory = "$root\never"
         FromDate = '2026.01.01'; ToDate = '2026.02.01'; ExpectedLogMarker = $marker } (Get-Date)
     function Line([string]$Message) { ConvertTo-JournalRecord "AB`t0`t12:00:00.000`tCore 01`t$Message" }
-    function Get-Verdict($TerminalRecords, $TesterRecords) {
+    function Get-Verdict($TerminalRecords, $TesterRecords, $Settings = $verdictSettings) {
         $result = [ordered]@{ status = $null; exit_code = $null; message = $null }
-        Set-SmokeVerdict $result @{ records = @($TerminalRecords); ranges = @() } @{ records = @($TesterRecords); ranges = @() } $verdictSettings 'C:\d\E-s1.ini' 'E-s1' $true
+        Set-SmokeVerdict $result @{ records = @($TerminalRecords); ranges = @() } @{ records = @($TesterRecords); ranges = @() } $Settings 'C:\d\E-s1.ini' 'E-s1' $true
     }
     $term = @((Line 'successfully initialized from start config "C:\d\E-s1.ini"'), (Line 'automatic testing started'), (Line 'last test passed with result "successfully finished"'))
     $start = Line 'EURUSD,H1: testing of Experts\Mql5Smoke\E-s1.ex5 from 2026.01.01 00:00 to 2026.02.01 00:00 started with inputs:'
@@ -307,6 +307,17 @@ try {
     Check 'journal: an OnInit failure record fails (exit 1)' ((Get-Verdict $term @($start, $markerLine, (Line 'tester stopped because OnInit returns non-zero'), $pass)).exit_code -eq 1)
     Check 'journal: a required marker that never appears fails (exit 1)' ((Get-Verdict $term @($start, $pass)).exit_code -eq 1)
     Check 'journal: an echoed input cannot fake an OnInit failure' ((Get-Verdict $term @($start, (Line '  x=tester stopped because OnInit returns non-zero'), $markerLine, $pass)).exit_code -eq 0)
+    # An EA without inputs gets a start record ending in plain "started" (seen in real use).
+    $noMarker = Resolve-TesterSettings @{ SourcePath = $source; Symbol = 'EURUSD'; Period = 'H1'; UseExpertDefaults = $true; OutputDirectory = "$root\never"
+        FromDate = '2026.01.01'; ToDate = '2026.02.01' } (Get-Date)
+    $bareStart = Line 'EURUSD,H1: testing of Experts\Mql5Smoke\E-s1.ex5 from 2026.01.01 00:00 to 2026.02.01 00:00 started'
+    $other = Line 'EURUSD,H1: testing of Experts\Mql5Smoke\E-s0.ex5 from 2026.01.01 00:00 to 2026.02.01 00:00 started'
+    Check 'journal: an EA without inputs ("started") passes' ((Get-Verdict $term @($bareStart, $pass) $noMarker).exit_code -eq 0)
+    Check 'journal: mixed start forms still count as a second test (exit 1)' ((Get-Verdict $term @($start, $other, $pass) $noMarker).exit_code -eq 1)
+    $wrong = Get-Verdict $term @($other, $pass) $noMarker
+    Check 'journal: an input-less start must name this run''s expert (exit 1)' (($wrong.exit_code -eq 1) -and $wrong.checks.single_test_start -and -not $wrong.checks.expected_test_start)
+    Check 'journal: an input-less start with an OnInit failure still fails (exit 1)' ((Get-Verdict $term @($bareStart, (Line 'tester stopped because OnInit returns non-zero'), $pass) $noMarker).exit_code -eq 1)
+    Check 'journal: text after the start record is not accepted (exit 1)' ((Get-Verdict $term @((Line ($bareStart.message + ' again')), $pass) $noMarker).exit_code -eq 1)
     $foreign = Get-Verdict @(Line 'configuration chargee') @($start, $markerLine, $pass)
     Check 'journal: no English phrase gives journal_phrases_not_found (exit 2)' (($foreign.exit_code -eq 2) -and ($foreign.status -eq 'journal_phrases_not_found'))
 
