@@ -136,3 +136,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: No harm: each compile or tester call is a short-lived process, so the provider is released when it ends; a locked file already fails the hash as tested. Not worth another change to reviewed code.
+
+## G16 · fixed · 2026-10-23 · LOW
+- Task: Point the mql5-coding skill at the MQL5 Docs MCP
+- Where: skills/mql5-coding/SKILL.md:27
+- Problem: F1: Citations give page ids only when asked, while an earlier task note (its requirement R4, not part of this repository) asked for them every time
+- Trigger: -
+- Fix: none needed: page ids only when asked is the current rule on purpose (see G12 and PR #8: answers under a no-internal-ids chat rule were dropping the page entirely); the earlier task note is superseded
+- Log: 20261023004453-1a38db
+- Why skipped: not a gap; closed so it matches the rule G12 records
