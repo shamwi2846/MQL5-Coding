@@ -145,3 +145,30 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: none needed: page ids only when asked is the current rule on purpose (see G12 and PR #8: answers under a no-internal-ids chat rule were dropping the page entirely); the earlier task note is superseded
 - Log: 20261023004453-1a38db
 - Why skipped: not a gap; closed so it matches the rule G12 records
+
+## G17 · fixed · 2026-10-23 · LOW
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: skills/mql5-coding/version.json:1
+- Problem: F1: Record the changed release target
+- Trigger: Preparing the release requested by R13, which names v2.1.2.
+- Fix: Record in Notes that v2.1.2 was already released and this fix will ship as v2.1.3, then tag the fix accordingly.
+- Log: 20261023180355-814060
+- Why skipped: pair: confirmed by B
+
+## G18 · fixed · 2026-10-23 · LOW
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: skills/mql5-coding/version.json:1
+- Problem: F1: Record why the release target changed to 2.1.3
+- Trigger: Preparing this fix for release under R13, which specifies v2.1.2.
+- Fix: Add a Notes entry explaining that v2.1.2 already exists and this fix will ship as v2.1.3.
+- Log: 20261023181359-1a8d52
+- Why skipped: labelled GAP by the reviewer; harm: The release metadata and authoritative release requirement disagree without an explanation in Notes.
+
+## G19 · open · 2026-10-23 · LOW
+- Task: -
+- Where: skills/mql5-coding/references/strategy-tester.md:47
+- Problem: CodeRabbit (PR 10): treat a /config terminal as another test run only when its ini matches this skill's staging; otherwise close it.
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Declined: since 2.1.1 this skill's own runs show as the held run lock, never as 'already running', so a /config terminal behind 'already running' is always another runner (for example a project's own test runner). Closing it would interrupt that run; waiting is the safe default.
