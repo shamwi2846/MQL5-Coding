@@ -25,7 +25,7 @@ Before asserting or using an MQL5 API, language, event, error, trade-retcode, sy
 2. **Evidence.** Base each claim on returned text that states it. `=` proves only that the name matched; `~` is a search result and never identifies an API.
 3. **Reuse.** Keep text already read for the rest of the task while the index tag is unchanged; never read it twice.
 4. **Citations.** Name the docs page title, plus the docs version (download date and index tag) once per answer; give page ids only when asked.
-5. **Fallback.** When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 docs`, then use and cite official MetaQuotes pages (mql5.com, metatrader5.com); check them too when freshness matters. Never fill gaps from memory. The docs cover the MQL5 reference and books, not terminal settings or startup `.ini` keys. If no `mql5_find` tool is listed, say so and use the official pages the same way; a missing MCP never stalls review work.
+5. **Fallback.** For a question, the best match does not always answer it: read the other pages its answer lists before deciding. When the docs cannot support a claim, write exactly `Not verified in the installed MQL5 docs`, then use and cite official MetaQuotes pages (mql5.com, metatrader5.com); check them too when freshness matters. Never fill gaps from memory. The docs cover the MQL5 reference and books, not terminal settings or startup `.ini` keys. If no `mql5_find` tool is listed, say so and use the official pages the same way; a missing MCP never stalls review work.
 6. **Logs** describe the local program and run, not the API.
 
 ## Evidence and classification
