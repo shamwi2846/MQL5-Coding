@@ -20,6 +20,7 @@ param(
     [string]$OutputDirectory,
     [string]$TerminalPath,
     [string]$TimeoutSeconds,
+    [string]$WaitSeconds,
     [string]$ExpectedLogMarker,
     [Parameter(ValueFromRemainingArguments = $true)][object[]]$UnknownArguments
 )

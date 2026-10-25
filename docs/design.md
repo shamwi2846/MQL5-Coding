@@ -212,6 +212,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
    - An access error or a missing path counts as "cannot be read". It never becomes an empty result.
    - The script never closes a process. The model closes the terminal gracefully when the user's instructions allow, then reruns (see the notes below).
    - This check runs right after the run lock is taken (run step 1). A terminal started by another run, from any chat, therefore shows up as that run's held lock, which means wait, not as a running terminal to close. Real use on 2026-10-22 showed the old order telling a run to close another run's terminal.
+   - **Waiting (`-WaitSeconds`, default 0, added in 2.2.0).** A held lock or a running selected terminal is the only "busy" result; while it lasts, the run retries the lock and this check every 2 s, the last time just before one deadline, then stops with exit 4; a retry that a slow wake-up delays past the deadline does not count, even when it finds the terminal free. All process paths are read before a running selected terminal counts as busy. This happens before the output folder is claimed or anything compiles. Every other exit-4 cause stops at once: no usable terminal, no single data folder, an unreadable process path. Nothing is ever closed. Real use on 2026-10-22 and 2026-10-23 had chats writing their own retry loops, one through 57 tries, while another project's runner held the terminal.
 
 **Run:**
 

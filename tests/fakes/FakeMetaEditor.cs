@@ -1,6 +1,7 @@
 // Stands in for metaeditor64.exe in tests/Test-Safety.ps1. FAKE_EDITOR_MODE picks the behavior:
 // ok (fresh .ex5, clean log), errors, many (60 diagnostics, one very long), nolog, stale (clean log
 // but the .ex5 untouched), child (exits at once; a child writes the results 1.5 s later), hang.
+// FAKE_LOCK_PROBE names a run lock file: FAKE_PROBE_OUT then gets "<UTC ticks> locked|free" at compile start.
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -18,11 +19,20 @@ static class FakeMetaEditor
         return null;
     }
 
+    static bool IsLocked(string path)
+    {
+        try { using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) return false; }
+        catch (FileNotFoundException) { return false; }
+        catch (IOException) { return true; }
+    }
+
     static int Main(string[] args)
     {
         string mode = Environment.GetEnvironmentVariable("FAKE_EDITOR_MODE") ?? "ok";
         string counter = Environment.GetEnvironmentVariable("FAKE_EDITOR_COUNTER");
         if (counter != null && mode != "late") File.AppendAllText(counter, "x");
+        string probe = Environment.GetEnvironmentVariable("FAKE_LOCK_PROBE");
+        if (probe != null) File.WriteAllText(Environment.GetEnvironmentVariable("FAKE_PROBE_OUT"), DateTime.UtcNow.Ticks + " " + (IsLocked(probe) ? "locked" : "free"));
         string source = Value(args, "/compile:"), log = Value(args, "/log:");
         string ex5 = Path.ChangeExtension(source, ".ex5");
         string ok = "Result: 0 errors, 0 warnings, 10 ms elapsed, cpu='X64 Regular'\r\n";

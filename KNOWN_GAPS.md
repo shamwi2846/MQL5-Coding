@@ -172,3 +172,21 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: Declined: since 2.1.1 this skill's own runs show as the held run lock, never as 'already running', so a /config terminal behind 'already running' is always another runner (for example a project's own test runner). Closing it would interrupt that run; waiting is the safe default.
+
+## G20 · fixed · 2026-10-24 · LOW
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: skills/mql5-coding/scripts/Mql5Tester.ps1:122-130
+- Problem: F2: Check all process paths before reporting a busy terminal
+- Trigger: Get-Process returns the running selected terminal before another terminal whose Path cannot be read.
+- Fix: Remember the selected running process, finish checking every process path, then report busy only if all paths were readable.
+- Log: 20261024235205-515631
+- Why skipped: pair: both
+
+## G21 · fixed · 2026-10-24 · LOW
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: skills/mql5-coding/references/strategy-tester.md:47
+- Problem: F3: Include waiting time in the client timeout guidance
+- Trigger: Follow the recommended -WaitSeconds 900 example and give the client call a timeout slightly longer than the default -TimeoutSeconds 300.
+- Fix: Tell callers to allow WaitSeconds plus TimeoutSeconds, with additional time for compilation and cleanup, or use a background command.
+- Log: 20261024235205-515631
+- Why skipped: pair: confirmed by B

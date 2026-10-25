@@ -67,7 +67,7 @@ State symptom, cause, impact and evidence separately.
 - Never run an `.ex5` the user did not build or vouch for. Building it here does not make it trustworthy: the EA runs with the tester agent's file and network access.
 - Pass markers go only in a separate test EA. Never edit the user's EA just to test it, unless the user asks or it already has a self-test. A user's EA gets the plain engine smoke test.
 - Start with the `MQL5_RESULT` line; open `result.json` only when it is not enough. Never read a report (about 130,000 tokens) or a journal whole; use the tester guide's bounded reads.
-- Exit 4 because another tester run holds the lock: that run, perhaps from another chat, is still going; wait and retry, never close its terminal. Exit 4 because the selected terminal is already running: when the user's instructions allow, close it gracefully as the tester guide says and rerun; otherwise ask.
+- Exit 4 because another tester run holds the lock, or the selected terminal is busy with another test: rerun with `-WaitSeconds` (for example 900, as a background command) instead of writing a retry loop, and never close its terminal. Exit 4 because a terminal you or the user opened by hand is running: when the user's instructions allow, close it gracefully as the tester guide says and rerun; otherwise ask.
 
 ## Report
 

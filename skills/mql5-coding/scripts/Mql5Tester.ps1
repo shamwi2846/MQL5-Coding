@@ -91,6 +91,7 @@ function Resolve-TesterSettings($Options, [datetime]$Now) {
         set_path            = $setPath
         use_expert_defaults = [bool]$Options.UseExpertDefaults
         timeout_seconds     = [int](ConvertTo-Bounded $Options.TimeoutSeconds '-TimeoutSeconds' 1 86400 300)
+        wait_seconds        = [int](ConvertTo-Bounded $Options.WaitSeconds '-WaitSeconds' 0 86400 0)
         marker              = if ($marker) { $marker } else { $null }
         output              = $output
     }
@@ -109,13 +110,27 @@ function Get-Mt5DataFolder([string]$TerminalPath, [string]$AppData) {
     $found[0]
 }
 
+# Exit 4 for something that ends by itself (another run, a running terminal), so -WaitSeconds may wait for it.
+function Stop-Busy([string]$Message) {
+    $exception = New-Object InvalidOperationException $Message
+    $exception.Data['exit_code'] = 4
+    $exception.Data['busy'] = $true
+    throw $exception
+}
+
 # Gate 4: MT5 cannot run two copies from one install folder.
 function Assert-TerminalNotRunning([string]$TerminalPath) {
+    $running = $null
     foreach ($process in @(Get-Process -Name terminal64 -ErrorAction SilentlyContinue)) {
         $path = $null
         try { $path = $process.Path } catch { }
         if (-not $path) { Stop-Mql5 "The path of terminal64.exe (PID $($process.Id)) cannot be read, so it may be the selected terminal." 4 }
-        if ($path -eq $TerminalPath) { Stop-Mql5 "The selected terminal is already running (PID $($process.Id)). Close it and rerun." 4 }
+        if ($path -eq $TerminalPath) { $running = $process }
+    }
+    # Busy only once every path was read: an unreadable one stops at once instead of being waited on.
+    if ($running) {
+        Stop-Busy ("The selected terminal is already running (PID $($running.Id)). If its command line has /config it is another test run: " +
+            'rerun with -WaitSeconds. Otherwise see the tester guide before closing it.')
     }
 }
 
@@ -123,7 +138,35 @@ function Assert-TerminalNotRunning([string]$TerminalPath) {
 function Open-RunLock([string]$DataFolder) {
     $path = Join-Path $DataFolder '.mql5-coding-smoke.data-lock'
     try { [IO.FileStream]::new($path, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None, 1, [IO.FileOptions]::DeleteOnClose) }
-    catch [IO.IOException] { Stop-Mql5 "Another tester run holds $path; wait for it to finish and retry. Do not close its terminal." 4 }
+    catch [IO.IOException] { Stop-Busy "Another tester run holds $path; rerun with -WaitSeconds or retry later. Do not close its terminal." }
+}
+
+# Takes the run lock once no other run holds it and the selected terminal is not running, retrying
+# every 2 s until the deadline $WaitSeconds away. Any other gate failure stops at once.
+function Wait-RunLock([string]$TerminalPath, [string]$DataFolder, [int]$WaitSeconds) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($WaitSeconds)
+    $busy = $null
+    while ($true) {
+        $lock = $null
+        try {
+            # Lock first: a terminal started by another run (from any chat) then reports as that run's
+            # held lock, meaning wait, rather than as a running terminal the caller might close.
+            $lock = Open-RunLock $DataFolder
+            Assert-TerminalNotRunning $TerminalPath
+        }
+        catch {
+            if ($lock) { $lock.Dispose(); $lock = $null }
+            if (-not $_.Exception.Data['busy'] -or $WaitSeconds -eq 0) { throw }
+            $busy = $_.Exception.Message
+        }
+        # A retry counts only by the deadline, so a slow wake-up never starts a run late.
+        if ($lock -and (-not $busy -or [DateTime]::UtcNow -le $deadline)) { return $lock }
+        if ($lock) { $lock.Dispose() }
+        # The last retry is due 0.1 s before the deadline, so that it can still count.
+        $left = ($deadline - [DateTime]::UtcNow).TotalMilliseconds - 100
+        if ($left -le 0) { Stop-Mql5 "$busy Not free within -WaitSeconds $WaitSeconds." 4 }
+        Start-Sleep -Milliseconds ([Math]::Ceiling([Math]::Min(2000, $left)))
+    }
 }
 
 function Copy-StagedExpert([string]$Source, [string]$Destination, [string]$ExpectedSha256) {
@@ -384,7 +427,7 @@ function Invoke-Mt5Smoke {
         [string]$SourcePath, [string]$IncludePath, [string]$Symbol, [string]$Period, [string]$FromDate, [string]$ToDate,
         [string]$Model, [string]$Deposit, [string]$Currency, [string]$Leverage, [string]$ExecutionMode,
         [string]$SetPath, [switch]$UseExpertDefaults, [string]$OutputDirectory, [string]$TerminalPath,
-        [string]$TimeoutSeconds, [string]$ExpectedLogMarker, [string]$AppData = $env:APPDATA, [datetime]$Now = (Get-Date)
+        [string]$TimeoutSeconds, [string]$WaitSeconds, [string]$ExpectedLogMarker, [string]$AppData = $env:APPDATA, [datetime]$Now = (Get-Date)
     )
     $result = [ordered]@{
         status = 'failed'; exit_code = 2; message = $null; run_id = $null; settings = $null; terminal = $null
@@ -402,10 +445,7 @@ function Invoke-Mt5Smoke {
         $result.terminal_build = [Diagnostics.FileVersionInfo]::GetVersionInfo($terminal).FilePrivatePart
         $data = Get-Mt5DataFolder $terminal $AppData
         $result.data_folder = $data
-        # Lock first: a terminal started by another run (from any chat) then reports as that run's
-        # held lock, meaning wait, rather than as a running terminal the caller might close.
-        $lock = Open-RunLock $data
-        Assert-TerminalNotRunning $terminal
+        $lock = Wait-RunLock $terminal $data $settings.wait_seconds
         if (Test-Path -LiteralPath $settings.output) { Stop-Mql5 "The output folder must not exist yet: $($settings.output)" }
         New-OutputFolder $settings.output
         $result.output_folder = $settings.output
