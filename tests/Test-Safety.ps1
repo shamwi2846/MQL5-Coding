@@ -39,6 +39,7 @@ $terminalCount = "$root\terminal-count.txt"
 $env:FAKE_DATA_FOLDER = $data
 $env:FAKE_EDITOR_COUNTER = $editorCount
 $env:FAKE_TERMINAL_COUNTER = $terminalCount
+$shell = (Get-Process -Id $PID).Path
 
 function Get-Count([string]$Path) { if (Test-Path -LiteralPath $Path) { (Get-Content -LiteralPath $Path -Raw).Length } else { 0 } }
 function Reset-Fakes([string]$EditorMode = 'ok', [string]$TerminalMode = 'pass') {
@@ -129,6 +130,9 @@ try {
     # Group 1: terminal gates and containment
     Reset-Fakes 'ok' 'idle'
     $idle = Start-Process -FilePath $terminal -PassThru
+    # Its own start count can land late (a new .exe is scanned first); wait so it is not counted as a run's.
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    while (((Get-Count $terminalCount) -eq 0) -and ($clock.Elapsed.TotalSeconds -lt 30)) { Start-Sleep -Milliseconds 50 }
     try {
         Reset-Fakes
         $r = Invoke-Smoke
@@ -140,6 +144,27 @@ try {
         try { $r = Invoke-Smoke } finally { $lock.Dispose() }
         Check 'lock held while a terminal runs: exit 4 names the other run, not the terminal' (($r.exit_code -eq 4) -and ($r.message -match 'Another tester run') -and
             ($r.message -notmatch 'already running') -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath (Get-LastOutput)) -and -not $idle.HasExited)
+        # A terminal that keeps running without a lock (a project's own runner): wait it out, then block.
+        # A compile would show: the failing fake editor deletes the build next to the source.
+        Reset-Fakes 'errors'
+        [IO.File]::WriteAllText($ex5, 'sentinel build')
+        $sentinelHash = Get-FileSha256 $ex5
+        $savedAppData = $env:APPDATA
+        $env:APPDATA = $appData
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        try {
+            $waitOutput = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$scripts\Invoke-Mt5TesterSmoke.ps1" -SourcePath $source `
+                -Symbol EURUSD -Period H1 -UseExpertDefaults -OutputDirectory "$root\waited" -TerminalPath $terminal -WaitSeconds 6
+            $waitExit = $LASTEXITCODE
+        }
+        finally { $env:APPDATA = $savedAppData }
+        $waited = $clock.Elapsed.TotalSeconds
+        $waitLines = @(@($waitOutput) -like 'MQL5_RESULT *')
+        Check '-WaitSeconds with the terminal still running: waits, then exit 4 with one summary line; nothing compiled, created or closed' (
+            ($waitExit -eq 4) -and ($waitLines.Count -eq 1) -and ($waitLines[0] -match 'Not free within -WaitSeconds 6') -and ($waited -ge 5.5) -and
+            ((Get-Count $editorCount) -eq 0) -and ((Get-Count $terminalCount) -eq 0) -and ((Get-FileSha256 $ex5) -eq $sentinelHash) -and
+            -not (Test-Path -LiteralPath "$root\waited") -and ((Get-SmokeFiles).Count -eq 0) -and
+            (@(Get-ChildItem -LiteralPath $data -Filter *.ini -File).Count -eq 0) -and -not $idle.HasExited)
     }
     finally { Stop-Process -Id $idle.Id -Force; $idle.WaitForExit() }
     Reset-Fakes
@@ -150,8 +175,45 @@ try {
     try {
         $r = Invoke-Smoke
         Check 'held run lock: exit 4, nothing compiled or created' (($r.exit_code -eq 4) -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath (Get-LastOutput)))
+        # Retrying every 2 s regardless would try once more at 2 s, after the deadline, and could then compile.
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        $r = Invoke-Smoke @{ WaitSeconds = '1' }
+        $waited = $clock.Elapsed.TotalSeconds
+        Check '-WaitSeconds 1 with the lock held: exit 4 at the deadline, no retry after it, nothing compiled' (($r.exit_code -eq 4) -and
+            ($r.message -match 'Not free within -WaitSeconds 1') -and ($waited -ge 0.8) -and ($waited -lt 1.8) -and ((Get-Count $editorCount) -eq 0))
     }
     finally { $lock.Dispose() }
+    # A slow wake-up: this Start-Sleep frees the other run's lock, then oversleeps past the deadline. The
+    # retry finds the lock free, but too late, so the run must stop instead of starting.
+    Reset-Fakes
+    $lateLock = Open-RunLock $data
+    function Start-Sleep([int]$Milliseconds) {
+        if ($script:lateLock) { $script:lateLock.Dispose(); $script:lateLock = $null }
+        [Threading.Thread]::Sleep($Milliseconds + 1500)
+    }
+    try { $r = Invoke-Smoke @{ WaitSeconds = '1' } }
+    finally { Remove-Item Function:\Start-Sleep; if ($lateLock) { $lateLock.Dispose() } }
+    Check '-WaitSeconds 1, lock freed but the retry wakes after the deadline: exit 4, nothing compiled or created, lock free' (($r.exit_code -eq 4) -and
+        ($r.message -match 'Not free within -WaitSeconds 1') -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath (Get-LastOutput)) -and
+        $(try { (Open-RunLock $data).Dispose(); $true } catch { $false }))
+    # Another process holds the lock for 3 s, then records the time and releases it. A waiting run must
+    # compile only after that, while holding the lock itself.
+    Reset-Fakes
+    $lockPath = Join-Path $data '.mql5-coding-smoke.data-lock'
+    $holderScript = "`$lock = [IO.FileStream]::new('$lockPath', 'OpenOrCreate', 'ReadWrite', 'None', 1, 'DeleteOnClose'); " +
+        "[IO.File]::WriteAllText('$root\held.txt', 'held'); Start-Sleep -Seconds 3; [IO.File]::WriteAllText('$root\released.txt', [DateTime]::UtcNow.Ticks); `$lock.Dispose()"
+    $holder = Start-Process -FilePath $shell -NoNewWindow -PassThru -RedirectStandardError "$root\holder-errors.txt" -ArgumentList '-NoProfile', '-NonInteractive', '-EncodedCommand',
+        ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($holderScript)))
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    while (-not (Test-Path -LiteralPath "$root\held.txt") -and ($clock.Elapsed.TotalSeconds -lt 30)) { Start-Sleep -Milliseconds 100 }
+    $env:FAKE_LOCK_PROBE = $lockPath
+    $env:FAKE_PROBE_OUT = "$root\lock-probe.txt"
+    try { $r = Invoke-Smoke @{ WaitSeconds = '30' } } finally { Remove-Item Env:\FAKE_LOCK_PROBE, Env:\FAKE_PROBE_OUT; $holder.WaitForExit() }
+    $probe = @((Get-Content -LiteralPath "$root\lock-probe.txt" -Raw -ErrorAction SilentlyContinue) -split ' ')
+    $released = Get-Content -LiteralPath "$root\released.txt" -Raw -ErrorAction SilentlyContinue
+    Check '-WaitSeconds while another run holds the lock: compiles only after the release, holding the lock, then passes and frees it' (
+        ($r.exit_code -eq 0) -and ($probe.Count -eq 2) -and $released -and ([long]$probe[0] -gt [long]$released) -and ($probe[1] -eq 'locked') -and
+        $(try { (Open-RunLock $data).Dispose(); $true } catch { $false }))
     $empty = Join-Path $root 'Empty AppData'
     [void][IO.Directory]::CreateDirectory($empty)
     Check 'no data folder for the install: exit 4' ((Invoke-Smoke @{ AppData = $empty }).exit_code -eq 4)
@@ -187,7 +249,6 @@ try {
     $journal = "$data\Tester\logs\$(Get-Date -Format yyyyMMdd).log"
     [IO.File]::AppendAllText($journal, "AB`t0`t11:00:00.000`tCore 01`ttester stopped because OnInit returns non-zero`r`n", [Text.Encoding]::Unicode)
     $journalBytes = [IO.File]::ReadAllBytes($journal)
-    $shell = (Get-Process -Id $PID).Path
     $realAppData = $env:APPDATA
     $env:APPDATA = $appData
     try {

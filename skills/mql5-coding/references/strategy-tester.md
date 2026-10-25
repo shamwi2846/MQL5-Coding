@@ -3,17 +3,18 @@
 Compiles one Expert Advisor with the selected terminal's own MetaEditor and runs it once in the Strategy Tester. It runs without asking: the skill is built for a test PC.
 
 ```
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<skill folder>\scripts\Invoke-Mt5TesterSmoke.ps1" -SourcePath <file.mq5> [-IncludePath <MQL5 folder>] -Symbol <symbol> -Period <period> [-FromDate <YYYY.MM.DD> -ToDate <YYYY.MM.DD>] [-Model <0-4>] [-Deposit <amount>] [-Currency <code>] [-Leverage <n>] [-ExecutionMode <n>] (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath <terminal64.exe>] [-TimeoutSeconds 300] [-ExpectedLogMarker <MQL5_CODING_PASS:hex>]
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<skill folder>\scripts\Invoke-Mt5TesterSmoke.ps1" -SourcePath <file.mq5> [-IncludePath <MQL5 folder>] -Symbol <symbol> -Period <period> [-FromDate <YYYY.MM.DD> -ToDate <YYYY.MM.DD>] [-Model <0-4>] [-Deposit <amount>] [-Currency <code>] [-Leverage <n>] [-ExecutionMode <n>] (-SetPath <file.set> | -UseExpertDefaults) -OutputDirectory <new folder> [-TerminalPath <terminal64.exe>] [-TimeoutSeconds 300] [-WaitSeconds 0] [-ExpectedLogMarker <MQL5_CODING_PASS:hex>]
 ```
 
 **Settings:**
 - `-OutputDirectory` must not exist yet; its parent must.
-- `-TerminalPath`, else the only MT5 installation found. That terminal must not be running.
+- `-TerminalPath`, else the only MT5 installation found. That terminal must not be running, unless `-WaitSeconds` waits for it.
 - `-IncludePath` defaults to the nearest `MQL5` folder above the source; without one, MetaEditor uses its own data folder's `MQL5`.
 - Dates default to the last complete calendar month; `-Model` to 1 (1-minute OHLC); `-ExecutionMode` to 0 (normal; -1 random delay; n > 0 a delay in ms up to 600000; model 2 ignores delays).
 - `-Deposit`, `-Currency` and `-Leverage` (an integer n, written as `1:n`) default to MT5's own tester values; `headline` shows what MT5 used.
 - `-SetPath` takes the EA inputs from a `.set` file; `-UseExpertDefaults` uses the compiled defaults.
 - `-ExpectedLogMarker` requires the EA to print exactly that line during the test. Test EAs only.
+- `-WaitSeconds` (default 0): when another tester run holds the lock or the selected terminal is already running, wait up to this long for it to finish, then run; nothing is closed. Use it instead of a retry loop when another chat may be testing. Other exit-4 causes stop at once.
 
 **Engine smoke defaults.** When the user asks only whether an EA starts, runs and finishes, omit the dates, model, execution mode, deposit, currency and leverage: the run is fast and uses the last complete month. Never judge strategy behavior or results with these defaults; a backtest the user asks for uses their settings.
 
@@ -43,6 +44,7 @@ A pass never proves strategy correctness, profitability or full-date coverage.
 - A first run on a new symbol or date range may need longer for history sync: raise `-TimeoutSeconds` instead of retrying.
 - MT5 must run in English: the pass rules match English journal phrases. Otherwise the run ends with `journal_phrases_not_found`.
 - Do not open the selected terminal by hand during a run.
-- Start a long test as a background command, or give the call a timeout longer than `-TimeoutSeconds`. If the client kills the runner, MT5 stops with it, but that run's staging stays behind.
+- Start a long test, or one with `-WaitSeconds`, as a background command, or give the call a timeout longer than `-WaitSeconds` plus `-TimeoutSeconds`, with a few minutes to spare for the compile and cleanup. If the client kills the runner, MT5 stops with it, but that run's staging stays behind.
 - **Closing a running terminal (exit 4, "already running" only; a held lock means another run is in progress), when the user's instructions allow it:** first check its command line (`Get-CimInstance Win32_Process`). If it contains `/config`, it is another test run, from another chat or a project's own runner; wait for it to exit instead. Otherwise close it gracefully with `CloseMainWindow()` and wait up to 30 s (usually 1-3 s). Only if it is still running, use `Stop-Process`; a hard kill can damage history files. Then wait up to 30 s until no `terminal64.exe` at that path and no `metatester64.exe` from that install folder remain. If any remain, report the run as blocked and do not rerun.
 - For users who keep a terminal open: a second MT5 install just for testing, selected with `-TerminalPath` and started once with a demo login.
+- The lock only covers runs of this tester: a project's own runner can start the same terminal at any time. Run one project's tests at a time, or give each project that tests in parallel its own MT5 install.
