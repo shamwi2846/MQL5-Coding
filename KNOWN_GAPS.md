@@ -190,3 +190,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Tell callers to allow WaitSeconds plus TimeoutSeconds, with additional time for compilation and cleanup, or use a background command.
 - Log: 20261024235205-515631
 - Why skipped: pair: confirmed by B
+
+## G22 · open · 2026-10-25 · LOW
+- Task: -
+- Where: tests/Test-Safety.ps1:147
+- Problem: CodeRabbit (PR 11): no test where the selected terminal exits during -WaitSeconds and the run then proceeds
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Declined: no money, data or security harm; a regression would only end in blocked/4. Waiting on the terminal is covered by T1 and the no-terminal-gate mutation, the lock handover by T2, and both real A/B checks passed

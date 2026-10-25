@@ -8,7 +8,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<skill 
 
 **Settings:**
 - `-OutputDirectory` must not exist yet; its parent must.
-- `-TerminalPath`, else the only MT5 installation found. That terminal must not be running.
+- `-TerminalPath`, else the only MT5 installation found. That terminal must not be running, unless `-WaitSeconds` waits for it.
 - `-IncludePath` defaults to the nearest `MQL5` folder above the source; without one, MetaEditor uses its own data folder's `MQL5`.
 - Dates default to the last complete calendar month; `-Model` to 1 (1-minute OHLC); `-ExecutionMode` to 0 (normal; -1 random delay; n > 0 a delay in ms up to 600000; model 2 ignores delays).
 - `-Deposit`, `-Currency` and `-Leverage` (an integer n, written as `1:n`) default to MT5's own tester values; `headline` shows what MT5 used.
