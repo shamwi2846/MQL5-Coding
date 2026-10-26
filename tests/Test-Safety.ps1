@@ -208,7 +208,8 @@ try {
     function Invoke-Mql5Compile([string]$SourcePath, [string]$IncludePath, [string]$MetaEditorPath, [string]$AppData) {
         $compiled = & $realCompile -SourcePath $SourcePath -IncludePath $IncludePath -MetaEditorPath $MetaEditorPath -AppData $AppData
         $script:foreign = Start-Process -FilePath $terminal -PassThru
-        while ((Get-Count $terminalCount) -eq 0) { [Threading.Thread]::Sleep(50) }
+        $started = [Diagnostics.Stopwatch]::StartNew()
+        while (((Get-Count $terminalCount) -eq 0) -and ($started.Elapsed.TotalSeconds -lt 30)) { [Threading.Thread]::Sleep(50) }
         # A 3 s compile uses part of the 5 s budget, so a late wait with a fresh deadline would show.
         [Threading.Thread]::Sleep(3000)
         $compiled

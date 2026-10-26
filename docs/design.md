@@ -191,7 +191,7 @@ The model omits these only for a pure engine smoke check (see "Engine smoke defa
 
 The script name stays as in v1. There is no preflight mode: with no confirmations, a run performs its gates first and stops before staging anything when one fails. Invalid input gives exit 2. A blocking condition gives exit 4: no usable terminal (missing, several found or not MT5), the terminal is running, there is no single data folder, or another run holds the run lock. Tests always start from source: the tester compiles it with the terminal's own `metaeditor64.exe`.
 
-**Gates, in order. Each failure stops before anything is staged:**
+**Gates, in order. Each failure stops before anything is staged, except the repeat of gate 4 right before launch (run step 7), which blocks after staging and keeps the output folder:**
 
 1. **Inputs.** Validate every setting.
    - Symbol and period must hold no line breaks, `=`, `;` or path separators. The period uses only letters, digits and `_`.
@@ -238,7 +238,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
    - After a normal exit, do the same: kill any processes still in the job, such as a lingering tester agent, and confirm it is empty.
    - Only then read evidence and clean up.
 
-**Pass rules.** Read only the bytes appended to each journal since run step 7. Files that are new since then (midnight rollover) are read whole. A file that got shorter is an evidence error (exit 2). Each line is tab-separated: code, level, time, source, message.
+**Pass rules.** Read only the bytes appended to each journal since run step 8. Files that are new since then (midnight rollover) are read whole. A file that got shorter is an evidence error (exit 2). Each line is tab-separated: code, level, time, source, message.
 
 Records are classified as follows:
 
