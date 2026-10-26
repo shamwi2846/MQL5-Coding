@@ -28,7 +28,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<skill 
 | 1 | `failed_checks` | It ran, but a pass rule failed; see `failed_checks` |
 | 2 | `failed`, `journal_phrases_not_found`, `cleanup_failed` | Input, compile, tool, evidence or cleanup failure |
 | 3 | `timeout` | The terminal and its agents were stopped |
-| 4 | `blocked` | No usable terminal (missing, several found, or running), no single data folder, or another run holds the lock (wait for it; never close its terminal); nothing was created |
+| 4 | `blocked` | No usable terminal (missing, several found, or running), no single data folder, or another run holds the lock (wait for it; never close its terminal). Usually nothing was created; when the terminal started during the compile, the output folder keeps its evidence: rerun with a new `-OutputDirectory` |
 
 A pass never proves strategy correctness, profitability or full-date coverage.
 
