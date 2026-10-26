@@ -199,3 +199,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: Declined: no money, data or security harm; a regression would only end in blocked/4. Waiting on the terminal is covered by T1 and the no-terminal-gate mutation, the lock handover by T2, and both real A/B checks passed
+
+## G23 · fixed · 2026-10-26 · LOW
+- Task: Implement the mql5-coding v2 skill from docs/design.md (new repository shamwi2846/MQL5-Coding)
+- Where: tests/Test-Safety.ps1:208-228
+- Problem: F1: Make T1 distinguish a renewed late-wait deadline
+- Trigger: The late gate incorrectly starts a fresh five-second wait after the normal, short fake compile.
+- Fix: Make the compile stub consume a known portion of the budget larger than the timing tolerance, leaving time for a retry, and assert blocking by the original deadline.
+- Log: 20261026222425-2646d0
+- Why skipped: pair: confirmed by A

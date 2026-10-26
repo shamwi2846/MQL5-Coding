@@ -212,7 +212,7 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
    - An access error or a missing path counts as "cannot be read". It never becomes an empty result.
    - The script never closes a process. The model closes the terminal gracefully when the user's instructions allow, then reruns (see the notes below).
    - This check runs right after the run lock is taken (run step 1). A terminal started by another run, from any chat, therefore shows up as that run's held lock, which means wait, not as a running terminal to close. Real use on 2026-10-22 showed the old order telling a run to close another run's terminal.
-   - **Waiting (`-WaitSeconds`, default 0, added in 2.2.0).** A held lock or a running selected terminal is the only "busy" result; while it lasts, the run retries the lock and this check every 2 s, the last time just before one deadline, then stops with exit 4; a retry that a slow wake-up delays past the deadline does not count, even when it finds the terminal free. All process paths are read before a running selected terminal counts as busy. This happens before the output folder is claimed or anything compiles. Every other exit-4 cause stops at once: no usable terminal, no single data folder, an unreadable process path. Nothing is ever closed. Real use on 2026-10-22 and 2026-10-23 had chats writing their own retry loops, one through 57 tries, while another project's runner held the terminal.
+   - **Waiting (`-WaitSeconds`, default 0, added in 2.2.0).** A held lock or a running selected terminal is the only "busy" result; while it lasts, the run retries the lock and this check every 2 s, the last time just before one deadline, then stops with exit 4; a retry that a slow wake-up delays past the deadline does not count, even when it finds the terminal free. All process paths are read before a running selected terminal counts as busy. This happens before the output folder is claimed or anything compiles. Since 2.2.1 the repeat of gate 4 right before launch (step 7) waits the same way, under the same deadline, keeping the run lock. Real use on 2026-10-24 showed a project's own runner starting the terminal during the compile, which blocked the run after its output folder existed. Every other exit-4 cause stops at once: no usable terminal, no single data folder, an unreadable process path. Nothing is ever closed. Real use on 2026-10-22 and 2026-10-23 had chats writing their own retry loops, one through 57 tries, while another project's runner held the terminal.
 
 **Run:**
 
@@ -231,8 +231,8 @@ The script name stays as in v1. There is no preflight mode: with no confirmation
      - Fixed values: `Optimization=0`, `ForwardMode=0`, `Report=<staged>`, `ReplaceReport=1`, `ShutdownTerminal=1`, `UseLocal=1`, `UseRemote=0`, `UseCloud=0`, `Visual=0`.
 
    No login, password or server key is ever written.
-7. Record each journal file's length in `<data>\logs` and `<data>\Tester\logs`.
-8. Repeat gate 4 right before launch.
+7. Repeat gate 4 right before launch, waiting under `-WaitSeconds` as above. A block here keeps the output folder and its evidence.
+8. Record each journal file's length in `<data>\logs` and `<data>\Tester\logs`, after any wait, so another test's journal lines are not read as this run's.
 9. Launch `terminal64.exe /config:"<ini>"` through `OwnedProcess` and wait for the deadline.
    - On timeout, kill the job and confirm it is empty (exit 3).
    - After a normal exit, do the same: kill any processes still in the job, such as a lingering tester agent, and confirm it is empty.

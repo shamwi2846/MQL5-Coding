@@ -196,6 +196,44 @@ try {
     Check '-WaitSeconds 1, lock freed but the retry wakes after the deadline: exit 4, nothing compiled or created, lock free' (($r.exit_code -eq 4) -and
         ($r.message -match 'Not free within -WaitSeconds 1') -and ((Get-Count $editorCount) -eq 0) -and -not (Test-Path -LiteralPath (Get-LastOutput)) -and
         $(try { (Open-RunLock $data).Dispose(); $true } catch { $false }))
+    # Another project's runner starts the terminal during the compile and keeps it. The run must wait before
+    # launch while holding its lock, then block at the deadline, leaving that test and its files alone.
+    Reset-Fakes 'ok' 'idle'
+    [void][IO.Directory]::CreateDirectory("$data\MQL5\Experts\Mql5Smoke")
+    $foreignFiles = @("$data\MQL5\Experts\Mql5Smoke\Other-s0000000002.ex5", "$data\Other-s0000000002.ini")
+    foreach ($file in $foreignFiles) { [IO.File]::WriteAllText($file, 'another test') }
+    $foreign = $null
+    $lockProbes = @()
+    $realCompile = ${function:Invoke-Mql5Compile}
+    function Invoke-Mql5Compile([string]$SourcePath, [string]$IncludePath, [string]$MetaEditorPath, [string]$AppData) {
+        $compiled = & $realCompile -SourcePath $SourcePath -IncludePath $IncludePath -MetaEditorPath $MetaEditorPath -AppData $AppData
+        $script:foreign = Start-Process -FilePath $terminal -PassThru
+        while ((Get-Count $terminalCount) -eq 0) { [Threading.Thread]::Sleep(50) }
+        # A 3 s compile uses part of the 5 s budget, so a late wait with a fresh deadline would show.
+        [Threading.Thread]::Sleep(3000)
+        $compiled
+    }
+    function Start-Sleep([int]$Milliseconds) {
+        $script:lockProbes += $(try { (Open-RunLock $data).Dispose(); 'free' } catch { 'held' })
+        if ($script:foreign.HasExited) { $script:lockProbes += 'other terminal gone' }
+        [Threading.Thread]::Sleep($Milliseconds)
+    }
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    try { $r = Invoke-Smoke @{ WaitSeconds = '5' } }
+    finally { Set-Item Function:\Invoke-Mql5Compile $realCompile; Remove-Item Function:\Start-Sleep }
+    $waited = $clock.Elapsed.TotalSeconds
+    try {
+        $saved = Get-Content -LiteralPath "$($r.output_folder)\result.json" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+        Check '-WaitSeconds with the terminal started during the compile: waits holding the lock, blocks at the deadline, other test untouched' (
+            ($r.exit_code -eq 4) -and ($r.message -match 'already running') -and ($r.message -match 'Not free within -WaitSeconds 5') -and
+            ($lockProbes.Count -ge 1) -and ($lockProbes -notcontains 'free') -and ($lockProbes -notcontains 'other terminal gone') -and
+            ($waited -ge 4.5) -and ($waited -lt 7) -and ((Get-Count $terminalCount) -eq 1) -and $foreign -and -not $foreign.HasExited -and
+            ($saved.status -eq 'blocked') -and $r.sha256 -and ($saved.sha256 -eq $r.sha256) -and (Test-Path -LiteralPath "$($r.output_folder)\$($r.staged_name).ini") -and
+            (@(Get-SmokeFiles | Where-Object Name -notlike 'Other-*').Count -eq 0) -and -not (Test-Path -LiteralPath "$data\$($r.staged_name).ini") -and
+            ((@($foreignFiles | ForEach-Object { Get-Content -LiteralPath $_ -Raw }) -join '|') -eq 'another test|another test') -and
+            $(try { (Open-RunLock $data).Dispose(); $true } catch { $false }))
+    }
+    finally { if ($foreign) { Stop-Process -Id $foreign.Id -Force; $foreign.WaitForExit() }; Remove-Item -LiteralPath $foreignFiles }
     # Another process holds the lock for 3 s, then records the time and releases it. A waiting run must
     # compile only after that, while holding the lock itself.
     Reset-Fakes

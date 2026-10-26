@@ -142,28 +142,29 @@ function Open-RunLock([string]$DataFolder) {
 }
 
 # Takes the run lock once no other run holds it and the selected terminal is not running, retrying
-# every 2 s until the deadline $WaitSeconds away. Any other gate failure stops at once.
-function Wait-RunLock([string]$TerminalPath, [string]$DataFolder, [int]$WaitSeconds) {
-    $deadline = [DateTime]::UtcNow.AddSeconds($WaitSeconds)
+# every 2 s until $Deadline. Given $Held, the lock this run already holds, it waits only for the
+# terminal. Any other gate failure stops at once.
+function Wait-RunLock([string]$TerminalPath, [string]$DataFolder, [datetime]$Deadline, [int]$WaitSeconds, $Held = $null) {
     $busy = $null
     while ($true) {
-        $lock = $null
+        $lock = $Held
         try {
             # Lock first: a terminal started by another run (from any chat) then reports as that run's
             # held lock, meaning wait, rather than as a running terminal the caller might close.
-            $lock = Open-RunLock $DataFolder
+            if (-not $lock) { $lock = Open-RunLock $DataFolder }
             Assert-TerminalNotRunning $TerminalPath
         }
         catch {
-            if ($lock) { $lock.Dispose(); $lock = $null }
+            if ($lock -and -not $Held) { $lock.Dispose() }
+            $lock = $null
             if (-not $_.Exception.Data['busy'] -or $WaitSeconds -eq 0) { throw }
             $busy = $_.Exception.Message
         }
         # A retry counts only by the deadline, so a slow wake-up never starts a run late.
-        if ($lock -and (-not $busy -or [DateTime]::UtcNow -le $deadline)) { return $lock }
-        if ($lock) { $lock.Dispose() }
+        if ($lock -and (-not $busy -or [DateTime]::UtcNow -le $Deadline)) { return $lock }
+        if ($lock -and -not $Held) { $lock.Dispose() }
         # The last retry is due 0.1 s before the deadline, so that it can still count.
-        $left = ($deadline - [DateTime]::UtcNow).TotalMilliseconds - 100
+        $left = ($Deadline - [DateTime]::UtcNow).TotalMilliseconds - 100
         if ($left -le 0) { Stop-Mql5 "$busy Not free within -WaitSeconds $WaitSeconds." 4 }
         Start-Sleep -Milliseconds ([Math]::Ceiling([Math]::Min(2000, $left)))
     }
@@ -445,7 +446,8 @@ function Invoke-Mt5Smoke {
         $result.terminal_build = [Diagnostics.FileVersionInfo]::GetVersionInfo($terminal).FilePrivatePart
         $data = Get-Mt5DataFolder $terminal $AppData
         $result.data_folder = $data
-        $lock = Wait-RunLock $terminal $data $settings.wait_seconds
+        $deadline = [DateTime]::UtcNow.AddSeconds($settings.wait_seconds)
+        $lock = Wait-RunLock $terminal $data $deadline $settings.wait_seconds
         if (Test-Path -LiteralPath $settings.output) { Stop-Mql5 "The output folder must not exist yet: $($settings.output)" }
         New-OutputFolder $settings.output
         $result.output_folder = $settings.output
@@ -474,8 +476,10 @@ function Invoke-Mt5Smoke {
         }
         [IO.File]::WriteAllText($staging.ini, (New-TesterIni $settings $staged), [Text.Encoding]::Unicode)
         Copy-Item -LiteralPath $staging.ini -Destination (Join-Path $settings.output "$staged.ini") -ErrorAction Stop
+        # A project's own runner may have started the terminal during the compile: wait for it too,
+        # keeping the lock, and only then note where the journals end, so its lines are not ours.
+        [void](Wait-RunLock $terminal $data $deadline $settings.wait_seconds $lock)
         $lengths = Get-JournalLengths $data
-        Assert-TerminalNotRunning $terminal
 
         Import-OwnedProcess
         $job = [OwnedProcess]::Start($terminal, "/config:`"$($staging.ini)`"", (Split-Path -Parent $terminal))
