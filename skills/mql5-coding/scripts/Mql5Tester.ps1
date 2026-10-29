@@ -110,14 +110,6 @@ function Get-Mt5DataFolder([string]$TerminalPath, [string]$AppData) {
     $found[0]
 }
 
-# Exit 4 for something that ends by itself (another run, a running terminal), so -WaitSeconds may wait for it.
-function Stop-Busy([string]$Message) {
-    $exception = New-Object InvalidOperationException $Message
-    $exception.Data['exit_code'] = 4
-    $exception.Data['busy'] = $true
-    throw $exception
-}
-
 # Gate 4: MT5 cannot run two copies from one install folder.
 function Assert-TerminalNotRunning([string]$TerminalPath) {
     $running = $null
@@ -129,8 +121,8 @@ function Assert-TerminalNotRunning([string]$TerminalPath) {
     }
     # Busy only once every path was read: an unreadable one stops at once instead of being waited on.
     if ($running) {
-        Stop-Busy ("The selected terminal is already running (PID $($running.Id)). If its command line has /config it is another test run: " +
-            'rerun with -WaitSeconds. Otherwise see the tester guide before closing it.')
+        Stop-Mql5 ("The selected terminal is already running (PID $($running.Id)). If its command line has /config it is another test run: " +
+            'rerun with -WaitSeconds. Otherwise see the tester guide before closing it.') 4 -Busy
     }
 }
 
@@ -138,7 +130,7 @@ function Assert-TerminalNotRunning([string]$TerminalPath) {
 function Open-RunLock([string]$DataFolder) {
     $path = Join-Path $DataFolder '.mql5-coding-smoke.data-lock'
     try { [IO.FileStream]::new($path, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None, 1, [IO.FileOptions]::DeleteOnClose) }
-    catch [IO.IOException] { Stop-Busy "Another tester run holds $path; rerun with -WaitSeconds or retry later. Do not close its terminal." }
+    catch [IO.IOException] { Stop-Mql5 "Another tester run holds $path; rerun with -WaitSeconds or retry later. Do not close its terminal." 4 -Busy }
 }
 
 # Takes the run lock once no other run holds it and the selected terminal is not running, retrying
@@ -265,35 +257,37 @@ function Get-LastSystemRecords($Records, [int]$From) {
 
 # Pass rules: decides the outcome from this run's journal records and fills checks and evidence.
 function Set-SmokeVerdict($Result, $Terminal, $Tester, $Settings, [string]$IniPath, [string]$Staged, [bool]$Exited) {
-    $t = @($Terminal.records); $q = @($Tester.records)
+    $terminalRecords = @($Terminal.records); $testerRecords = @($Tester.records)
     $checks = [ordered]@{}
-    $configAt = Find-SystemRecord $t 0 "successfully initialized from start config `"$IniPath`""
-    $startedAt = if ($configAt -ge 0) { Find-SystemRecord $t ($configAt + 1) 'automatic testing started' } else { -1 }
-    $finishedAt = if ($startedAt -ge 0) { Find-SystemRecord $t ($startedAt + 1) 'last test passed with result "successfully finished"' } else { -1 }
+    $configAt = Find-SystemRecord $terminalRecords 0 "successfully initialized from start config `"$IniPath`""
+    $startedAt = if ($configAt -ge 0) { Find-SystemRecord $terminalRecords ($configAt + 1) 'automatic testing started' } else { -1 }
+    $finishedAt = if ($startedAt -ge 0) { Find-SystemRecord $terminalRecords ($startedAt + 1) 'last test passed with result "successfully finished"' } else { -1 }
     $checks.start_config_loaded = $configAt -ge 0
     $checks.testing_started = $startedAt -ge 0
     $checks.terminal_reported_pass = $finishedAt -ge 0
 
     # A test-start record ends in "started with inputs:", or in plain "started" for an EA without
     # inputs (seen in real use). Every expert's start counts; this run's must match exactly.
-    $starts = @(for ($i = 0; $i -lt $q.Count; $i++) { if ($q[$i].kind -eq 'system' -and $q[$i].message -match 'testing of Experts\\.+ started( with inputs:)?\s*$') { $i } })
+    $starts = @(for ($i = 0; $i -lt $testerRecords.Count; $i++) {
+        if ($testerRecords[$i].kind -eq 'system' -and $testerRecords[$i].message -match 'testing of Experts\\.+ started( with inputs:)?\s*$') { $i }
+    })
     $prefix = "$($Settings.symbol),$($Settings.journal_period): "
     $expected = "${prefix}testing of Experts\Mql5Smoke\$Staged.ex5 from $($Settings.from) 00:00 to $($Settings.to) 00:00 started"
     $startAt = -1
     if ($starts.Count -eq 1) {
-        $message = $q[$starts[0]].message.TrimEnd()
+        $message = $testerRecords[$starts[0]].message.TrimEnd()
         if ([string]::Equals($message, $expected, [StringComparison]::OrdinalIgnoreCase) -or
             [string]::Equals($message, "$expected with inputs:", [StringComparison]::OrdinalIgnoreCase)) { $startAt = $starts[0] }
     }
-    $passAt = if ($startAt -ge 0) { Find-SystemRecord $q ($startAt + 1) 'Test passed in' $prefix } else { -1 }
+    $passAt = if ($startAt -ge 0) { Find-SystemRecord $testerRecords ($startAt + 1) 'Test passed in' $prefix } else { -1 }
     $checks.single_test_start = $starts.Count -eq 1
     $checks.expected_test_start = $startAt -ge 0
     $checks.test_passed = $passAt -ge 0
-    $checks.no_oninit_failure = (Find-SystemRecord $q 0 'tester stopped because OnInit returns non-zero') -lt 0
+    $checks.no_oninit_failure = (Find-SystemRecord $testerRecords 0 'tester stopped because OnInit returns non-zero') -lt 0
     if ($Settings.marker) {
         $seen = $false
         for ($i = $startAt + 1; $startAt -ge 0 -and $i -lt $passAt; $i++) {
-            if ($q[$i].kind -eq 'app' -and ($q[$i].message -replace '^\S+ \S+\s*', '').Trim() -ceq $Settings.marker) { $seen = $true }
+            if ($testerRecords[$i].kind -eq 'app' -and ($testerRecords[$i].message -replace '^\S+ \S+\s*', '').Trim() -ceq $Settings.marker) { $seen = $true }
         }
         $checks.marker_seen = $seen
     }
@@ -302,27 +296,22 @@ function Set-SmokeVerdict($Result, $Terminal, $Tester, $Settings, [string]$IniPa
     $Result.checks = $checks
     # A negative index would read from the end of the array, so only found records are listed.
     $Result.matched_lines = @(
-        foreach ($hit in @($t, $configAt), @($t, $startedAt), @($t, $finishedAt), @($q, $startAt), @($q, $passAt)) {
-            if ($hit[1] -ge 0) { $hit[0][$hit[1]].message }
-        })
+        foreach ($i in $configAt, $startedAt, $finishedAt) { if ($i -ge 0) { $terminalRecords[$i].message } }
+        foreach ($i in $startAt, $passAt) { if ($i -ge 0) { $testerRecords[$i].message } }
+    )
     $failed = @($checks.Keys | Where-Object { -not $checks[$_] })
     $Result.failed_checks = $failed
     $context = @()
     $terminalFailed = @($failed | Where-Object { $_ -in 'start_config_loaded', 'testing_started', 'terminal_reported_pass' })
-    if ($terminalFailed) { $context += [ordered]@{ journal = 'terminal'; checks = $terminalFailed; records = Get-LastSystemRecords $t 0 } }
+    if ($terminalFailed) { $context += [ordered]@{ journal = 'terminal'; checks = $terminalFailed; records = Get-LastSystemRecords $terminalRecords 0 } }
     $testerFailed = @($failed | Where-Object { $_ -in 'single_test_start', 'expected_test_start', 'test_passed', 'no_oninit_failure', 'marker_seen' })
-    if ($testerFailed) { $context += [ordered]@{ journal = 'tester'; checks = $testerFailed; records = Get-LastSystemRecords $q $startAt } }
+    if ($testerFailed) { $context += [ordered]@{ journal = 'tester'; checks = $testerFailed; records = Get-LastSystemRecords $testerRecords $startAt } }
     $Result.failure_context = $context
-    $errors = Get-CappedLines @(($t + $q) | Where-Object { $_.message -match 'error|failed|cannot|critical' } | ForEach-Object { $_.message }) 20
-    $Result.error_lines = $errors
+    $Result.error_lines = Get-CappedLines @(($terminalRecords + $testerRecords) | Where-Object { $_.message -match 'error|failed|cannot|critical' } | ForEach-Object { $_.message }) 20
     $Result.journals = @($Terminal.ranges) + @($Tester.ranges)
 
-    $phraseSeen = $false
-    foreach ($record in $t) {
-        foreach ($phrase in 'successfully initialized from start config', 'automatic testing started', 'last test passed with result') {
-            if ($record.kind -eq 'system' -and $record.message.Contains($phrase)) { $phraseSeen = $true }
-        }
-    }
+    $phraseSeen = @($terminalRecords | Where-Object { $_.kind -eq 'system' -and
+        $_.message -cmatch 'successfully initialized from start config|automatic testing started|last test passed with result' }).Count -gt 0
     if (-not $phraseSeen) {
         return Set-Outcome $Result 2 'journal_phrases_not_found' 'No expected English phrase appeared in the terminal journal: MT5 must run in English, or the start config was not loaded.'
     }

@@ -208,3 +208,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Make the compile stub consume a known portion of the budget larger than the timing tolerance, leaving time for a retry, and assert blocking by the original deadline.
 - Log: 20261026222425-2646d0
 - Why skipped: pair: confirmed by A
+
+## G24 · fixed · 2026-10-29 · LOW
+- Task: Task: Small tidy-ups of the mql5-coding scripts (no behavior change)
+- Where: skills/mql5-coding/scripts/Mql5Compile.ps1:206
+- Problem: F1: Preserve the missing-Result diagnostic
+- Trigger: The compile log exists but contains no Result: line.
+- Fix: Replace [string]$resultLine in Regex.Match with "$resultLine", which converts the empty pipeline value to an empty string and preserves the existing diagnostic.
+- Log: 20261029025632-a963b8
+- Why skipped: labelled GAP by the reviewer; harm: The documented failure message changes, violating R7.

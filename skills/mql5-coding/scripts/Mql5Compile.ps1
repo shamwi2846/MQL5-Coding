@@ -3,9 +3,11 @@
 
 $Mql5ScriptsFolder = $PSScriptRoot
 
-function Stop-Mql5([string]$Message, [int]$ExitCode = 2) {
+# -Busy marks something that ends by itself (another run, a running terminal), so -WaitSeconds may wait for it.
+function Stop-Mql5([string]$Message, [int]$ExitCode = 2, [switch]$Busy) {
     $exception = New-Object InvalidOperationException $Message
     $exception.Data['exit_code'] = $ExitCode
+    if ($Busy) { $exception.Data['busy'] = $true }
     throw $exception
 }
 
@@ -131,8 +133,8 @@ function Set-Outcome($Result, [int]$ExitCode, [string]$Status, $Message) {
 }
 
 # Compiles one .mq5 and returns an ordered result. Exit codes: 0 fresh artifact, 1 compile errors,
-# 2 input or tool failure, 3 timeout. The full log is kept (result.log) whenever any diagnostic was
-# cut or the result is a failure; otherwise the temporary folder is deleted.
+# 2 input or tool failure, 3 timeout. On exit 2 or 3, or when diagnostics were cut, the temporary
+# folder stays, with the full log (result.log) when MetaEditor wrote one; otherwise it is deleted.
 function Invoke-Mql5Compile {
     param(
         [string]$SourcePath,
@@ -200,10 +202,11 @@ function Invoke-Mql5Compile {
         $result.diagnostics = $diagnostics.lines
         $result.diagnostic_total = $diagnostics.total
         $result.truncated = $diagnostics.truncated
-        $resultLine = @($lines | Where-Object { $_ -match '^Result:' } | Select-Object -Last 1)
-        $counts = [regex]::Match([string]($resultLine -join ''), '^Result:\s*(\d+)\s+errors?,\s*(\d+)\s+warnings?')
+        $resultLine = $lines | Where-Object { $_ -match '^Result:' } | Select-Object -Last 1
+        # "$resultLine", not [string]$resultLine: without a Result line the latter reaches Match as null.
+        $counts = [regex]::Match("$resultLine", '^Result:\s*(\d+)\s+errors?,\s*(\d+)\s+warnings?')
         if (-not $counts.Success) { Stop-Mql5 'The compile log has no Result line.' }
-        $result.result_line = $resultLine[0].Trim()
+        $result.result_line = $resultLine.Trim()
         $result.errors = [int]$counts.Groups[1].Value
         $result.warnings = [int]$counts.Groups[2].Value
         if ($result.errors -gt 0) { return Set-Outcome $result 1 'compile_errors' "$($result.errors) compile error(s)." }
